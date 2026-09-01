@@ -16,16 +16,17 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_PATH = os.environ.get("POI_DB", "data/pois.sqlite")
 
-# Degrees of margin required inside the coverage box before it is trusted. A
-# route that runs off the edge of the extract would silently lose its POIs
-# there, which is worse than being slow.
-COVERAGE_MARGIN_DEG = 0.02
+# Coverage is a grid of cells that actually hold data, not a bounding box. A
+# box cannot describe a region: the north-west extract's box spans Bologna,
+# Verona and Parma, none of which are in it, and claiming them would return no
+# points of interest at all with nothing to say why.
+COVERAGE_CELL_DEG = 0.1
 
 
 class LocalPoiStore:
     def __init__(self, path: str = DEFAULT_PATH) -> None:
         self.path = path
-        self._coverage: Optional[Tuple[float, float, float, float]] = None
+        self._cells: set = set()
         self._count = 0
         if self.available:
             self._read_coverage()
@@ -42,30 +43,46 @@ class LocalPoiStore:
     def _read_coverage(self) -> None:
         try:
             with self._connect() as connection:
-                row = connection.execute(
-                    "SELECT min_lat, min_lon, max_lat, max_lon, count FROM coverage"
-                ).fetchone()
+                self._count = sum(
+                    row[0] or 0
+                    for row in connection.execute("SELECT count FROM coverage")
+                )
+                self._cells = {
+                    (row[0], row[1])
+                    for row in connection.execute(
+                        "SELECT cell_lat, cell_lon FROM coverage_cells"
+                    )
+                }
         except sqlite3.Error:
             return
-        if row:
-            self._coverage = (row[0], row[1], row[2], row[3])
-            self._count = row[4] or 0
 
     @property
     def count(self) -> int:
         return self._count
 
     def covers(self, points: Sequence[Tuple[float, float]]) -> bool:
-        """True when every corridor point sits well inside the extract."""
-        if not self._coverage or not points:
+        """True when every corridor point falls in a cell that holds data.
+
+        Deliberately strict: the point's own cell must have something in it,
+        not merely a neighbour. Being generous at the edge is exactly where
+        lying is worse than being slow — a lenient version claimed Verona,
+        eight kilometres past where the extract's data actually stops, and
+        would have answered "no fountains here" when the truth was "this
+        database has never heard of here".
+
+        A route through a genuinely empty cell falls back to Overpass. That
+        costs time; it does not cost the truth.
+        """
+        if not self._cells or not points:
             return False
-        min_lat, min_lon, max_lat, max_lon = self._coverage
-        m = COVERAGE_MARGIN_DEG
         return all(
-            (min_lat + m) <= lat <= (max_lat - m)
-            and (min_lon + m) <= lon <= (max_lon - m)
+            (int(lat // COVERAGE_CELL_DEG), int(lon // COVERAGE_CELL_DEG)) in self._cells
             for lat, lon in points
         )
+
+    @property
+    def cells(self) -> int:
+        return len(self._cells)
 
     def near(
         self, points: Sequence[Tuple[float, float]], radius_m: int

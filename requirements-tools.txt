@@ -1,0 +1,5 @@
+# Only for tools/build_poi_db.py, which turns an .osm.pbf into the local POI
+# database. Not needed to run the app, and deliberately kept out of
+# requirements.txt: it needs a build toolchain and has no business in a
+# deployment image.
+osmium>=3.6

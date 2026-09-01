@@ -260,13 +260,29 @@ on every request. That is not fixable from this side, so the launch regions are
 extracted once instead:
 
 ```bash
-curl -O https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf
-python -m tools.build_poi_db nord-ovest-latest.osm.pbf data/pois.sqlite
+./.venv/bin/pip install -r requirements-tools.txt          # pyosmium
+mkdir -p data && cd data
+curl -O https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf   # Milan
+curl -O https://download.geofabrik.de/europe/italy/centro-latest.osm.pbf       # Rome
+cd ..
+./.venv/bin/python -m tools.build_poi_db data/pois.sqlite \
+    data/nord-ovest-latest.osm.pbf data/centro-latest.osm.pbf
 ```
 
-North-west Italy gives **139,485 POIs in 19 MB**, built in about 13 minutes.
-Re-run it when you want fresher data; drinking fountains do not move weekly.
-`data/` is gitignored — the database is rebuildable, not source.
+`pyosmium` is in `requirements-tools.txt`, not `requirements.txt`: it needs a
+build toolchain and has no business in a deployment image.
+
+Several extracts go into one database, each keeping its own coverage. North-west
+Italy alone is **139,485 POIs in 19 MB**, about 13 minutes to build. Re-run it
+when you want fresher data; drinking fountains do not move weekly. `data/` is
+gitignored — the database is rebuildable, not source.
+
+**Coverage is a grid of cells that hold data, not a bounding box.** A box cannot
+describe a region: the north-west extract's rectangle spans Bologna, Verona and
+Parma, none of which are in it. The first version claimed all three and returned
+zero POIs, silently, with no fallback. A point is now covered only if its own
+~11 km cell holds data — deliberately strict, because a route through an empty
+cell falling back to Overpass costs time, while claiming it costs the truth.
 
 Measured on the same loops, before and after:
 
