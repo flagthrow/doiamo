@@ -181,7 +181,8 @@ WATER_INTERVAL_KM = 3.0
 MONUMENT_KINDS = ["monument", "art"]
 NATURE_KINDS = ["green", "viewpoint"]
 
-# What the user says they want to see.
+# What the user says they want to see. "none" is not offered in the UI but
+# remains a valid request: it drops sights from the score and leaves water.
 SIGHTS: List[str] = ["both", "monuments", "nature", "none"]
 
 MODES: List[str] = ["loop", "route"]

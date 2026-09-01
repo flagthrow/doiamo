@@ -108,7 +108,7 @@ header {
   background: none; border: 0; padding: 0; cursor: pointer; color: inherit;
   font: inherit; text-align: left;
 }
-header h1 { font-size: 18px; margin: 0; font-weight: 660; letter-spacing: -.03em; }
+header h1 { font-size: 23px; margin: 0; font-weight: 680; letter-spacing: -.035em; }
 header h1 span { color: var(--accent); }
 header .tagline { color: var(--ink-3); font-size: 12.5px; margin: 0; }
 header .spacer { flex: 1; }
@@ -135,7 +135,9 @@ header .spacer { flex: 1; }
 .lang button { padding: 4px 11px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
 .segmented { border-radius: var(--r-md); padding: 3px; }
 .segmented button { padding: 9px 10px; font-size: 13.5px; border-radius: 9px; }
-#sights button { padding: 9px 4px; font-size: 12.5px; }
+.field-row .segmented button { padding: 9px 4px; font-size: 12px; }
+/* On a phone the row stacks rather than squeezing six labels across. */
+@media (max-width: 460px) { .field-row { grid-template-columns: 1fr; } }
 
 .lang button[aria-pressed="true"],
 .segmented button[aria-pressed="true"] {
