@@ -3,6 +3,7 @@ const state = {
   mode: "route",   // both endpoints by default; the checkbox makes it a loop
   sport: "running",
   surface: "asphalt",
+  sights: "both",
   distanceKm: 10,
   gainM: 150,
   // Both targets are opt-in. A default climb target of 150 m is unreachable
@@ -568,11 +569,59 @@ function showApp() {
   state.view = "app";
   document.body.dataset.view = "app";
   moveControls("sidebarSlot");
+  document.getElementById("sidebarSlot").hidden = true;
   document.getElementById("newSearch").hidden = false;
-  // Must be synchronous: the caller draws and fits bounds straight after, and
-  // fitBounds against a map Leaflet still believes is 0x0 picks an absurd zoom.
-  map.invalidateSize({ animate: false });
+  renderSummary();
   updateMapHint();
+}
+
+// The map is opened deliberately rather than shown alongside: on a phone it
+// would take the half of the screen the results need.
+function openMap(routeId) {
+  if (routeId) state.activeId = routeId;
+  const view = document.getElementById("mapView");
+  view.hidden = false;
+  document.body.classList.add("map-open");
+
+  const route = state.routes.find((r) => r.id === state.activeId);
+  document.getElementById("mapTitle").textContent = route
+    ? t("mapOf") + " " + (route.distance_m / 1000).toFixed(1) + " km · +" +
+      Math.round(route.ascent_m) + " m"
+    : t("mapOf");
+
+  // Leaflet sized itself while the overlay was display:none.
+  map.invalidateSize({ animate: false });
+  renderResults();
+  drawRoutes(true);
+  renderPoiLegend();
+  drawPois();
+}
+
+function closeMap() {
+  document.getElementById("mapView").hidden = true;
+  document.body.classList.remove("map-open");
+}
+
+function renderSummary() {
+  const box = document.getElementById("summaryText");
+  if (!box) return;
+  const bits = [];
+  if (state.start) bits.push(state.start.label);
+  if (state.mode === "route" && state.end) bits.push("\u2192 " + state.end.label);
+  const detail = [
+    state.mode === "loop" ? t("modeLoop") : t("modeRoute"),
+    t(state.sport),
+    state.mode === "loop" || !state.distanceAny ? state.distanceKm + " km" : null,
+    t(state.surface),
+  ].filter(Boolean).join(" · ");
+
+  box.innerHTML = "";
+  const main = document.createElement("span");
+  main.textContent = bits.join(" ");
+  const muted = document.createElement("span");
+  muted.className = "muted";
+  muted.textContent = (bits.length ? "  ·  " : "") + detail;
+  box.append(main, muted);
 }
 
 // ---------------------------------------------------------------- messages
@@ -747,7 +796,10 @@ async function loadPois() {
     const response = await fetch("/api/pois", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ route_ids: state.routes.map((r) => r.id) }),
+      body: JSON.stringify({
+        route_ids: state.routes.map((r) => r.id),
+        sights: state.sights,
+      }),
     });
     if (!response.ok) {
       state.poiFailed = true;
@@ -868,9 +920,11 @@ function drawRoutes(fit) {
 function selectRoute(id) {
   state.activeId = id;
   renderResults();
-  drawRoutes(true);
-  renderPoiLegend();
-  drawPois();
+  if (!document.getElementById("mapView").hidden) {
+    drawRoutes(true);
+    renderPoiLegend();
+    drawPois();
+  }
 }
 
 function renderResults() {
@@ -894,10 +948,7 @@ function renderResults() {
   state.routes.forEach((route, index) => {
     const card = document.createElement("div");
     card.className = "result" + (route.id === state.activeId ? " active" : "");
-    card.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return;
-      selectRoute(route.id);
-    });
+
 
     const head = document.createElement("div");
     head.className = "head";
@@ -948,7 +999,15 @@ function renderResults() {
     const extra = state.poiScores[route.id];
     if (extra) {
       bars.appendChild(bar(t("scoreWater"), extra.water));
-      bars.appendChild(bar(t("scoreScenery"), extra.scenery));
+      // Only the axis the viewer asked for is scored, so only it is shown —
+      // a bar for something that did not count would be a lie.
+      const wanted = (lastPayload.query || {}).sights;
+      if (extra.sights !== null && extra.sights !== undefined) {
+        const label = wanted === "monuments" ? t("scoreMonuments")
+                    : wanted === "nature" ? t("scoreNature")
+                    : t("scoreSights");
+        bars.appendChild(bar(label, extra.sights));
+      }
     }
 
     const counts = (state.poiCounts && state.poiCounts[route.id]) || {};
@@ -970,10 +1029,14 @@ function renderResults() {
 
     const actions = document.createElement("div");
     actions.className = "actions";
+    const mapButton = document.createElement("button");
+    mapButton.type = "button";
+    mapButton.textContent = t("showOnMap");
+    mapButton.addEventListener("click", () => openMap(route.id));
     const link = document.createElement("a");
     link.href = "/api/gpx/" + route.id;
     link.textContent = t("download");
-    actions.appendChild(link);
+    actions.append(mapButton, link);
 
     card.append(head, bars);
     if (badgeRow) card.appendChild(badgeRow);
@@ -1032,6 +1095,7 @@ async function search() {
     mode: state.mode,
     sport: state.sport,
     surface: state.surface,
+    sights: state.sights,
   };
   body.elevation_gain_m = state.gainAny ? null : state.gainM;
   if (state.mode === "loop") {
@@ -1073,7 +1137,8 @@ async function search() {
 
     renderContext();
     renderResults();
-    drawRoutes(true);
+    renderSummary();
+    drawRoutes(false);
     loadPois();
   } catch (err) {
     message(t("error"), "warn");
@@ -1107,6 +1172,7 @@ function applyLang() {
 // ---------------------------------------------------------------- boot
 function wireEverything() {
   wireSegmented("surface", "surface");
+  wireSegmented("sights", "sights");
   wireSegmented("sport", "sport", () => {
     // A cyclist asking for 10 km is not asking for the same ride a runner is.
     const distance = document.getElementById("distance");
@@ -1163,6 +1229,14 @@ function wireEverything() {
 
   document.getElementById("search").addEventListener("click", search);
   document.getElementById("newSearch").addEventListener("click", showHome);
+  document.getElementById("mapClose").addEventListener("click", closeMap);
+  document.getElementById("editSearch").addEventListener("click", () => {
+    const slot = document.getElementById("sidebarSlot");
+    slot.hidden = !slot.hidden;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !document.getElementById("mapView").hidden) closeMap();
+  });
   document.getElementById("brand").addEventListener("click", showHome);
 
   document.getElementById("lang").addEventListener("click", (e) => {

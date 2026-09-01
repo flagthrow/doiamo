@@ -49,7 +49,7 @@ The only credential needed is an [OpenRouteService](https://openrouteservice.org
 key (free). Weather and air quality come from Open-Meteo, which needs no key.
 
 ```bash
-./.venv/bin/python -m pytest -q     # 119 tests, no network needed
+./.venv/bin/python -m pytest -q     # 122 tests, no network needed
 ```
 
 ## Working without an API key
@@ -177,6 +177,13 @@ apart, and three identical lines in a dropdown help nobody. The city is part of
 the label, so "Colosseo, Roma" and "Colosseo, Milano" stay distinct. Repeated
 prefixes are cached, which absorbs most of the typing.
 
+## The results page
+
+The results are the page; **the map opens on demand**. A route list is what you
+read first, and on a phone a permanently visible map costs the half of the
+screen the cards need. Each card carries its own map button, which opens a
+full-screen view focused on that route with its points of interest.
+
 ## Map views
 
 Two basemaps, switchable from the control on the map and remembered per
@@ -215,15 +222,28 @@ everything worth seeing.
 ### POIs in the score
 
 They arrive after the routes are already on screen, so they **adjust** a score
-rather than being one of its terms: `total = old * (1 - 0.15) + bonus * 0.15`.
-The list re-orders when they land; the selected route stays selected.
+rather than being one of its terms. The list re-orders when they land.
 
-- **Water** is absolute. A 20 km run with no fountain is bad however good the
-  alternatives are, so the target is one every 3 km and the score saturates.
-- **Scenery** (monuments, art, viewpoints, green) is comparative — "worth
-  looking at" only means something next to the other options.
-- A runner weights water above scenery; a cyclist the reverse, because a
-  cyclist carries bottles.
+The distinction that matters is **universal goods versus preferences**:
+
+- **Water is universal.** Nobody wants fewer fountains, and running dry at
+  20 km is bad however good the alternatives are — so it is scored on an
+  absolute saturating scale, one fountain every 3 km being full marks.
+- **Monuments versus greenery is not a quality axis at all.** It is a
+  destination axis: a runner heading for parks and one touring the centro
+  storico want opposite routes. They are scored separately and comparatively,
+  and the viewer says which they want.
+
+An earlier version summed monuments, art, viewpoints and green into one
+"scenery" figure. That gave a route with forty monuments and no trees the same
+score as one with forty parks and no monuments, and served neither of the
+people who asked — a composite of preferences that point in opposite directions
+is a score of nothing.
+
+A stated preference has to be worth stating, so it moves 25% of the final
+figure; with sights turned off only water is left and it moves 12%. "Anything"
+takes the better of the two axes rather than the average, so a route full of
+parks is not marked down for having no statues.
 
 ### Overpass is unreliable, and that shapes the design
 

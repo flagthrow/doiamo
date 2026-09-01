@@ -253,30 +253,85 @@ def test_water_target_scales_with_distance():
     assert long_ < 0.3
 
 
-def test_scenery_is_comparative():
+def test_monuments_and_nature_are_scored_separately():
+    """The bug this replaces: summing them gave a route with forty monuments
+    and no trees the same score as one with forty parks and no monuments."""
     counts = {
-        "dull": {"monument": 0, "art": 0, "green": 0, "viewpoint": 0},
-        "rich": {"monument": 20, "art": 5, "green": 8, "viewpoint": 2},
+        "stone": {"monument": 40, "art": 10, "green": 0, "viewpoint": 0},
+        "trees": {"monument": 1, "art": 0, "green": 35, "viewpoint": 4},
     }
-    distances = {"dull": 10000.0, "rich": 10000.0}
-    scores = poi.score(counts, distances, "running")
-    assert scores["dull"]["scenery"] == 0.0
-    assert scores["rich"]["scenery"] == 1.0
+    distances = {"stone": 10000.0, "trees": 10000.0}
+    scores = poi.score(counts, distances, "running", "both")
+
+    assert scores["stone"]["monuments"] == 1.0
+    assert scores["stone"]["nature"] == 0.0
+    assert scores["trees"]["nature"] == 1.0
+    assert scores["trees"]["monuments"] == 0.0
 
 
-def test_scenery_counts_every_scenic_kind():
-    only_art = poi.score({"a": {"art": 10}, "b": {}}, {"a": 10000.0, "b": 10000.0}, "running")
-    only_green = poi.score({"a": {"green": 10}, "b": {}}, {"a": 10000.0, "b": 10000.0}, "running")
-    assert only_art["a"]["scenery"] == only_green["a"]["scenery"] == 1.0
+def test_a_preference_actually_separates_the_routes():
+    counts = {
+        "stone": {"water": 3, "monument": 40, "art": 10},
+        "trees": {"water": 3, "green": 35, "viewpoint": 4},
+    }
+    distances = {"stone": 10000.0, "trees": 10000.0}
+
+    wants_stone = poi.score(counts, distances, "running", "monuments")
+    wants_trees = poi.score(counts, distances, "running", "nature")
+
+    assert wants_stone["stone"]["bonus"] > wants_stone["trees"]["bonus"]
+    assert wants_trees["trees"]["bonus"] > wants_trees["stone"]["bonus"]
+    # And the gap is worth having, not a rounding difference.
+    assert wants_stone["stone"]["bonus"] - wants_stone["trees"]["bonus"] > 0.2
 
 
-def test_cycling_weights_scenery_over_water_and_running_the_reverse():
+def test_both_means_best_at_either_not_the_average():
+    """A route full of parks should not be marked down for having no statues."""
+    counts = {
+        "stone": {"water": 3, "monument": 40},
+        "trees": {"water": 3, "green": 40},
+        "dull": {"water": 3},
+    }
+    distances = {k: 10000.0 for k in counts}
+    scores = poi.score(counts, distances, "running", "both")
+
+    assert scores["stone"]["sights"] == 1.0
+    assert scores["trees"]["sights"] == 1.0
+    assert scores["dull"]["sights"] == 0.0
+
+
+def test_sights_none_leaves_only_water():
+    counts = {
+        "stone": {"water": 0, "monument": 40},
+        "wet": {"water": 9, "monument": 0},
+    }
+    distances = {"stone": 10000.0, "wet": 10000.0}
+    scores = poi.score(counts, distances, "running", "none")
+
+    assert scores["stone"]["sights"] is None
+    assert scores["wet"]["bonus"] > scores["stone"]["bonus"]
+    assert scores["wet"]["bonus"] == scores["wet"]["water"]
+
+
+def test_cycling_weights_sights_over_water_and_running_the_reverse():
     counts = {"a": {"water": 9, "monument": 0}, "b": {"water": 0, "monument": 30}}
     distances = {"a": 10000.0, "b": 10000.0}
-    run = poi.score(counts, distances, "running")
-    bike = poi.score(counts, distances, "cycling")
+    run = poi.score(counts, distances, "running", "monuments")
+    bike = poi.score(counts, distances, "cycling", "monuments")
     assert run["a"]["bonus"] > bike["a"]["bonus"]     # runner values the water more
     assert bike["b"]["bonus"] > run["b"]["bonus"]     # cyclist values the sights more
+
+
+def test_a_stated_preference_moves_the_score_more_than_water_alone():
+    """Asking someone what they want and barely acting on it is worse than
+    not asking."""
+    from backend import config
+
+    with_sights = poi.blend(0.70, 1.0, "monuments") - poi.blend(0.70, 0.0, "monuments")
+    water_only = poi.blend(0.70, 1.0, "none") - poi.blend(0.70, 0.0, "none")
+    assert round(with_sights, 4) == config.POI_SHARE
+    assert round(water_only, 4) == config.POI_SHARE_WATER_ONLY
+    assert with_sights > water_only
 
 
 def test_blend_moves_the_score_but_does_not_dominate_it():
@@ -287,6 +342,7 @@ def test_blend_moves_the_score_but_does_not_dominate_it():
     assert best > 0.70 > worst
     # POIs arrive late, so they adjust the ranking rather than deciding it.
     assert round(best - worst, 4) == config.POI_SHARE
+    assert config.POI_SHARE < 0.4
 
 
 def test_blend_stays_inside_zero_and_one():

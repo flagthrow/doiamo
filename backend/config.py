@@ -154,22 +154,37 @@ WEIGHTS: Dict[str, Dict[str, float]] = {
 
 MODES: List[str] = ["loop", "route"]
 # Points of interest arrive after the routes (Overpass is slow), so they adjust
-# an already-computed score rather than being one of its terms. This is the
-# share of the final number they can move.
-POI_SHARE = 0.15
+# an already-computed score rather than being one of its terms.
+#
+# Water and sights are different kinds of thing. Nobody wants fewer drinking
+# fountains, so water is a universal good on an absolute scale. Monuments
+# versus greenery is not a quality axis at all — it is a destination axis, and
+# a runner heading for parks and one touring the centro storico want opposite
+# routes. Averaging them scores neither.
+POI_SHARE = 0.25
 
-# Within that share: water is about not running dry, scenery is about the ride
-# being worth doing. A cyclist carries bottles; a runner mostly does not.
+# When the sights are not wanted, only water is left to adjust, and it should
+# not swing the ranking as far.
+POI_SHARE_WATER_ONLY = 0.12
+
+# Split within the POI share. A cyclist carries bottles; a runner mostly does
+# not, so water matters more on foot and the view matters more on wheels.
 POI_WEIGHTS: Dict[str, Dict[str, float]] = {
-    "running": {"water": 0.55, "scenery": 0.45},
-    "cycling": {"water": 0.40, "scenery": 0.60},
+    "running": {"water": 0.50, "sights": 0.50},
+    "cycling": {"water": 0.35, "sights": 0.65},
 }
 
 # One drinking fountain every this many kilometres counts as fully covered.
 WATER_INTERVAL_KM = 3.0
 
-# The kinds that make a route worth looking at.
-SCENERY_KINDS = ["monument", "art", "viewpoint", "green"]
+# The two destination axes, scored separately so a preference can pick one.
+MONUMENT_KINDS = ["monument", "art"]
+NATURE_KINDS = ["green", "viewpoint"]
+
+# What the user says they want to see.
+SIGHTS: List[str] = ["both", "monuments", "nature", "none"]
+
+MODES: List[str] = ["loop", "route"]
 
 SPORTS: List[str] = ["running", "cycling"]
 SURFACE_PREFERENCES: List[str] = ["asphalt", "mixed", "trail"]

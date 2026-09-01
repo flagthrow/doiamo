@@ -305,41 +305,82 @@ def score(
     counts: Dict[str, Dict[str, int]],
     distances_m: Dict[str, float],
     sport: str,
+    sights: str = "both",
 ) -> Dict[str, Dict[str, float]]:
-    """Turn POI counts into per-route water and scenery scores.
+    """Turn POI counts into per-route water and sights scores.
 
     Water is judged on an absolute scale — a 20 km run with no fountain is bad
-    however good the alternatives are — while scenery is comparative, because
-    "worth looking at" only means anything next to the other options.
+    however good the alternatives are. Monuments and greenery are judged
+    comparatively *and separately*, because they are a preference rather than a
+    measure of quality: summing them, as this once did, gave a route with forty
+    monuments and no trees the same score as one with forty parks and no
+    monuments, and served neither of the people who asked.
     """
     weights = config.POI_WEIGHTS.get(sport, config.POI_WEIGHTS["running"])
 
     water: Dict[str, float] = {}
-    density: Dict[str, float] = {}
+    monument_density: Dict[str, float] = {}
+    nature_density: Dict[str, float] = {}
+
     for route_id, per_kind in counts.items():
         km = max(0.1, distances_m.get(route_id, 0.0) / 1000.0)
         wanted = max(1.0, km / config.WATER_INTERVAL_KM)
         water[route_id] = min(1.0, per_kind.get("water", 0) / wanted)
-        scenic = sum(per_kind.get(kind, 0) for kind in config.SCENERY_KINDS)
-        density[route_id] = scenic / km
+        monument_density[route_id] = sum(
+            per_kind.get(kind, 0) for kind in config.MONUMENT_KINDS
+        ) / km
+        nature_density[route_id] = sum(
+            per_kind.get(kind, 0) for kind in config.NATURE_KINDS
+        ) / km
 
-    low = min(density.values()) if density else 0.0
-    high = max(density.values()) if density else 0.0
+    monuments = _rank_within(monument_density)
+    nature = _rank_within(nature_density)
 
     out: Dict[str, Dict[str, float]] = {}
     for route_id in counts:
-        scenery = 1.0 if high <= low else (density[route_id] - low) / (high - low)
+        if sights == "monuments":
+            chosen = monuments[route_id]
+        elif sights == "nature":
+            chosen = nature[route_id]
+        elif sights == "none":
+            chosen = None
+        else:
+            # "Either kind of interesting" — best in class at one is enough, so
+            # a route full of parks is not marked down for having no statues.
+            chosen = max(monuments[route_id], nature[route_id])
+
+        if chosen is None:
+            bonus = water[route_id]
+        else:
+            bonus = weights["water"] * water[route_id] + weights["sights"] * chosen
+
         out[route_id] = {
             "water": round(water[route_id], 4),
-            "scenery": round(scenery, 4),
-            "bonus": round(
-                weights["water"] * water[route_id] + weights["scenery"] * scenery, 4
-            ),
+            "monuments": round(monuments[route_id], 4),
+            "nature": round(nature[route_id], 4),
+            "sights": round(chosen, 4) if chosen is not None else None,
+            "bonus": round(bonus, 4),
         }
     return out
 
 
-def blend(previous_total: float, bonus: float) -> float:
-    """Fold the POI bonus into a score that was already computed without it."""
-    share = config.POI_SHARE
+def _rank_within(density: Dict[str, float]) -> Dict[str, float]:
+    """Position each route against its siblings, 0..1."""
+    if not density:
+        return {}
+    low, high = min(density.values()), max(density.values())
+    if high <= low:
+        return {route_id: 1.0 for route_id in density}
+    return {
+        route_id: (value - low) / (high - low) for route_id, value in density.items()
+    }
+
+
+def blend(previous_total: float, bonus: float, sights: str = "both") -> float:
+    """Fold the POI bonus into a score that was already computed without it.
+
+    A stated preference has to visibly move the ranking — asking someone what
+    they want and then barely acting on it is worse than not asking.
+    """
+    share = config.POI_SHARE_WATER_ONLY if sights == "none" else config.POI_SHARE
     return round(max(0.0, min(1.0, previous_total * (1 - share) + bonus * share)), 4)

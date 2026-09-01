@@ -91,6 +91,7 @@ async def options() -> Dict[str, object]:
         "modes": config.MODES,
         "sports": config.SPORTS,
         "surfaces": config.SURFACE_PREFERENCES,
+        "sights": config.SIGHTS,
     }
 
 
@@ -216,7 +217,8 @@ async def pois(request: PoiRequest) -> PoiResponse:
         # Saying so beats returning an empty success the UI cannot explain.
         return PoiResponse(
             kinds=poi.KINDS,
-            scenery_kinds=config.SCENERY_KINDS,
+            monument_kinds=config.MONUMENT_KINDS,
+            nature_kinds=config.NATURE_KINDS,
             available=False,
             expired=True,
         )
@@ -238,14 +240,17 @@ async def pois(request: PoiRequest) -> PoiResponse:
 
     scores = {}
     if ok:
-        for route_id, parts in poi.score(counts, distances, sport).items():
+        sights = request.sights if request.sights in config.SIGHTS else "both"
+        for route_id, parts in poi.score(counts, distances, sport, sights).items():
             entry = route_cache.get(route_id)
             previous = entry[0].scores.total if entry else 0.0
             scores[route_id] = PoiScores(
                 water=parts["water"],
-                scenery=parts["scenery"],
+                monuments=parts["monuments"],
+                nature=parts["nature"],
+                sights=parts["sights"],
                 bonus=parts["bonus"],
-                total=poi.blend(previous, parts["bonus"]),
+                total=poi.blend(previous, parts["bonus"], sights),
             )
 
     return PoiResponse(
@@ -253,7 +258,8 @@ async def pois(request: PoiRequest) -> PoiResponse:
         counts=counts,
         scores=scores,
         kinds=poi.KINDS,
-        scenery_kinds=config.SCENERY_KINDS,
+        monument_kinds=config.MONUMENT_KINDS,
+        nature_kinds=config.NATURE_KINDS,
         available=ok,
     )
 

@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-from .config import MODES, SPORTS, SURFACE_PREFERENCES
+from .config import MODES, SIGHTS, SPORTS, SURFACE_PREFERENCES
 
 
 class SearchRequest(BaseModel):
@@ -26,6 +26,8 @@ class SearchRequest(BaseModel):
     elevation_gain_m: Optional[float] = Field(None, ge=0, le=6000)
     sport: str = Field("running")
     surface: str = Field("asphalt")
+    # Monuments or greenery is a preference, not a measure of quality.
+    sights: str = Field("both")
 
     @model_validator(mode="after")
     def _check_mode(self) -> "SearchRequest":
@@ -44,7 +46,10 @@ class SearchRequest(BaseModel):
     def normalised(self) -> "SearchRequest":
         sport = self.sport if self.sport in SPORTS else "running"
         surface = self.surface if self.surface in SURFACE_PREFERENCES else "asphalt"
-        return self.model_copy(update={"sport": sport, "surface": surface})
+        sights = self.sights if self.sights in SIGHTS else "both"
+        return self.model_copy(
+            update={"sport": sport, "surface": surface, "sights": sights}
+        )
 
 
 class SurfaceBreakdown(BaseModel):
@@ -112,11 +117,15 @@ class Poi(BaseModel):
 
 class PoiRequest(BaseModel):
     route_ids: List[str] = Field(..., min_length=1, max_length=8)
+    sights: str = Field("both")
 
 
 class PoiScores(BaseModel):
     water: float
-    scenery: float
+    monuments: float
+    nature: float
+    # The one the preference actually selected; None when sights are not wanted.
+    sights: Optional[float] = None
     bonus: float
     total: float          # the route's score after folding the bonus in
 
@@ -126,7 +135,8 @@ class PoiResponse(BaseModel):
     counts: Dict[str, Dict[str, int]] = {}
     scores: Dict[str, PoiScores] = {}
     kinds: List[str] = []
-    scenery_kinds: List[str] = []
+    monument_kinds: List[str] = []
+    nature_kinds: List[str] = []
     # False when the lookup itself failed, so the UI never reports an
     # outage as "nothing nearby".
     available: bool = True

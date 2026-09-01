@@ -80,17 +80,31 @@
 
   <!-- ---------------- results ---------------- -->
   <main id="appView">
-    <div id="map"></div>
-    <aside class="sidebar">
-      <div class="sidebar-slot" id="sidebarSlot"></div>
+    <div class="results-page">
+      <!-- What was asked for, collapsed. The panel itself lives behind it. -->
+      <div class="summary" id="summary">
+        <div class="summary-text" id="summaryText"></div>
+        <button class="ghost-btn" id="editSearch" data-i18n="edit"></button>
+      </div>
+      <div class="edit-slot" id="sidebarSlot" hidden></div>
+
       <div class="context" id="context" hidden></div>
       <div class="results" id="results"></div>
       <footer>
         <p class="disclaimer" data-i18n="disclaimer"></p>
         <p data-i18n="footer"></p>
       </footer>
-    </aside>
+    </div>
   </main>
+
+  <!-- The map is opened on demand, not shown by default. -->
+  <div class="map-view" id="mapView" hidden>
+    <div class="map-bar">
+      <div class="map-title" id="mapTitle"></div>
+      <button class="modal-close" id="mapClose" type="button" aria-label="close">&times;</button>
+    </div>
+    <div id="map"></div>
+  </div>
 </div>
 
 <!-- ---------------- the movable control panel ---------------- -->
@@ -161,6 +175,16 @@
       <input type="checkbox" id="gainAny" checked>
       <span data-i18n="gainAny"></span>
     </label>
+  </div>
+
+  <div class="field">
+    <div class="label" data-i18n="sights"></div>
+    <div class="segmented" id="sights">
+      <button data-value="both" aria-pressed="true" data-i18n="sightsBoth"></button>
+      <button data-value="monuments" aria-pressed="false" data-i18n="sightsMonuments"></button>
+      <button data-value="nature" aria-pressed="false" data-i18n="sightsNature"></button>
+      <button data-value="none" aria-pressed="false" data-i18n="sightsNone"></button>
+    </div>
   </div>
 
   <div class="field">
