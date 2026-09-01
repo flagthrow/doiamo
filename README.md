@@ -49,8 +49,28 @@ The only credential needed is an [OpenRouteService](https://openrouteservice.org
 key (free). Weather and air quality come from Open-Meteo, which needs no key.
 
 ```bash
-./.venv/bin/python -m pytest -q     # 79 tests, no network needed
+./.venv/bin/python -m pytest -q     # 106 tests, no network needed
 ```
+
+## Working without an API key
+
+Routing is the only metered part of the app. Everything else — weather, air
+quality, points of interest, place search — runs on free keyless APIs. So the
+whole results page can be worked on with the routing faked:
+
+```bash
+./dev.sh          # http://127.0.0.1:8001
+```
+
+That serves the real application with `tools/offline_engine.py` in place of
+openrouteservice. Routes are invented, but staircased onto a rough street grid
+rather than drawn as smooth curves — a perfect circle on a map looks obviously
+wrong and hides the layout problems real routes would show. Loops start and end
+exactly on the point you asked for, as ORS round trips do.
+
+Everything else on that page is genuine: live weather and air quality, real
+Overpass POIs, and place search through Nominatim. Costs no quota, so it is
+also the right way to develop when the daily allowance is gone.
 
 ## The two modes
 
