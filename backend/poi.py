@@ -7,6 +7,7 @@ already on screen.
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -278,34 +279,81 @@ def assign(
 ) -> Tuple[List[Dict[str, object]], Dict[str, Dict[str, int]]]:
     """Tag each POI with the routes it sits near, and count them per route.
 
-    The Overpass corridor covers every candidate at once, so a fountain found
-    for one route has to be matched back to the routes it actually serves.
+    The lookup covers every candidate at once, so a fountain found for one
+    route has to be matched back to the routes it actually serves.
+
+    Done by scanning, this is POIs x routes x samples: a 40 km loop pulls
+    thousands of POIs from a wide box and compares each against a thousand
+    points on each of five routes, which was ten seconds of pure arithmetic.
+    Hashing the route points into a grid of cells the size of the match radius
+    turns it into a handful of lookups per POI.
     """
-    # Dense enough that a POI beside the route is never missed between samples.
-    sampled = {
-        route_id: geo.sample_points(
-            coords, max(20, int(geo.total_distance_m(coords) / 40))
-        )
-        for route_id, coords in routes.items()
-    }
     counts: Dict[str, Dict[str, int]] = {
         route_id: {kind: 0 for kind in KINDS} for route_id in routes
     }
+    if not routes:
+        return [], counts
+
+    # Cells must be the match radius in *metres* on both axes, or the 3x3
+    # search silently misses things. A degree of longitude is only ~70% of a
+    # degree of latitude at Milan's latitude, so one cell size for both would
+    # make east-west cells 70 m wide and let a POI 100 m east land two cells
+    # away, outside the neighbourhood being searched.
+    mean_lat = sum(
+        coords[0][1] for coords in routes.values() if coords
+    ) / max(1, len(routes))
+    lat_cell = radius_m / 111_132.0
+    lon_cell = radius_m / max(
+        1.0, 111_320.0 * math.cos(math.radians(mean_lat))
+    )
+
+    def cell(lat: float, lon: float) -> Tuple[int, int]:
+        return (int(lat / lat_cell), int(lon / lon_cell))
+
+    grids: Dict[str, Dict[Tuple[int, int], List[Tuple[float, float]]]] = {}
+    for route_id, coords in routes.items():
+        # Dense enough that a POI beside the route is never missed between
+        # samples, which the grid makes affordable.
+        points = geo.sample_points(
+            coords, max(20, int(geo.total_distance_m(coords) / 40))
+        )
+        grid: Dict[Tuple[int, int], List[Tuple[float, float]]] = {}
+        for lat, lon in points:
+            grid.setdefault(cell(lat, lon), []).append((lat, lon))
+        grids[route_id] = grid
 
     kept: List[Dict[str, object]] = []
-    for poi in pois:
+    for poi_item in pois:
+        poi_lat = float(poi_item["lat"])
+        poi_lon = float(poi_item["lon"])
+        base_row, base_col = cell(poi_lat, poi_lon)
+
         near: List[str] = []
-        for route_id, points in sampled.items():
-            for lat, lon in points:
-                if geo.haversine_m(poi["lon"], poi["lat"], lon, lat) <= radius_m:
-                    near.append(route_id)
-                    counts[route_id][poi["kind"]] += 1
-                    break
+        for route_id, grid in grids.items():
+            if _within(grid, base_row, base_col, poi_lon, poi_lat, radius_m):
+                near.append(route_id)
+                counts[route_id][poi_item["kind"]] += 1
         if near:
-            item = dict(poi)
+            item = dict(poi_item)
             item["routes"] = near
             kept.append(item)
     return kept, counts
+
+
+def _within(
+    grid: Dict[Tuple[int, int], List[Tuple[float, float]]],
+    row: int,
+    col: int,
+    lon: float,
+    lat: float,
+    radius_m: int,
+) -> bool:
+    for d_row in (-1, 0, 1):
+        for d_col in (-1, 0, 1):
+            for point_lat, point_lon in grid.get((row + d_row, col + d_col), ()):
+                if geo.haversine_m(lon, lat, point_lon, point_lat) <= radius_m:
+                    return True
+    return False
 
 
 def score(

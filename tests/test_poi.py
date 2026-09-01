@@ -469,3 +469,31 @@ async def test_it_still_retries_within_the_budget():
     assert ok is True and len(found) == 1
     assert len(hits) == 2
     assert hits[0] != hits[1]      # moved to the other mirror
+
+
+def test_assign_does_not_miss_points_east_or_west():
+    """The grid cells have to be the match radius in metres on both axes. A
+    degree of longitude is ~70% of a degree of latitude in Milan, so a single
+    degree-based cell size lets a POI due east fall outside the 3x3 search."""
+    from backend import geo
+
+    # A dead-straight north-south route, so anything found is found sideways.
+    route = [[9.19, 45.46 + i * 0.0002, 100.0] for i in range(60)]
+    routes = {"line": route}
+
+    mid_lat = route[len(route) // 2][1]
+    found_at = []
+    for offset_m in (10, 40, 70, 95):
+        deg = offset_m / (111_320 * math.cos(math.radians(mid_lat)))
+        for direction in (1, -1):
+            poi_item = {"id": "p", "kind": "water", "name": None,
+                        "lat": mid_lat, "lon": 9.19 + deg * direction}
+            tagged, counts = poi.assign([poi_item], routes)
+            actual = geo.haversine_m(9.19, mid_lat, poi_item["lon"], poi_item["lat"])
+            found_at.append((round(actual), len(tagged) == 1))
+
+    missed = [d for d, hit in found_at if not hit]
+    assert not missed, "missed POIs at {} m, all within {} m".format(
+        missed, poi.MATCH_RADIUS_M
+    )
+

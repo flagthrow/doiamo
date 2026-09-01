@@ -49,7 +49,7 @@ The only credential needed is an [OpenRouteService](https://openrouteservice.org
 key (free). Weather and air quality come from Open-Meteo, which needs no key.
 
 ```bash
-./.venv/bin/python -m pytest -q     # 122 tests, no network needed
+./.venv/bin/python -m pytest -q     # 135 tests, no network needed
 ```
 
 ## Working without an API key
@@ -244,6 +244,51 @@ A stated preference has to be worth stating, so it moves 25% of the final
 figure; with sights turned off only water is left and it moves 12%. "Anything"
 takes the better of the two axes rather than the average, so a route full of
 parks is not marked down for having no statues.
+
+### Where the POIs come from
+
+Two sources, chosen per request:
+
+| Source | When | Speed |
+|---|---|---|
+| **Local SQLite** | the corridor sits inside a built extract | ~0.02–0.7 s |
+| **Overpass** | anywhere else | 1–13 s, and fails often |
+
+Overpass turned out to be **96% of the time a lookup took** — not the network
+(126 KB), not our code (0.2 s), but their server working a planet-scale index
+on every request. That is not fixable from this side, so the launch regions are
+extracted once instead:
+
+```bash
+curl -O https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf
+python -m tools.build_poi_db nord-ovest-latest.osm.pbf data/pois.sqlite
+```
+
+North-west Italy gives **139,485 POIs in 19 MB**, built in about 13 minutes.
+Re-run it when you want fresher data; drinking fountains do not move weekly.
+`data/` is gitignored — the database is rebuildable, not source.
+
+Measured on the same loops, before and after:
+
+| Loop | Overpass | Local | POIs found |
+|---|---|---|---|
+| 2 km | 1.3 s | **0.02 s** | 217 → 224 |
+| 10 km | 4.3 s | **0.10 s** | 284 → 587 |
+| 25 km | 13.1 s | **0.65 s** | 232 → 755 |
+
+More POIs as well as faster, because nothing is truncated or dropped by a busy
+server.
+
+Matching POIs to routes is grid-hashed rather than scanned: at 40 km the naive
+version compared thousands of POIs against a thousand points on each of five
+routes, which was ten seconds of pure arithmetic. The grid cells have to be the
+match radius in *metres* on both axes — a degree of longitude is only ~70% of a
+degree of latitude in Milan, and a single degree-based cell size silently
+dropped POIs lying due east.
+
+A route that runs off the edge of the extract falls back to Overpass rather
+than half-answering: losing the POIs on the far side without saying so would be
+worse than being slow.
 
 ### Overpass is unreliable, and that shapes the design
 

@@ -143,6 +143,8 @@ class PoiResponse(BaseModel):
     # True when the routes are no longer in the cache — a restart, or a page
     # left open too long. Retrying will not help; searching again will.
     expired: bool = False
+    # "local", "overpass" or "cache" — useful for seeing which path answered.
+    source: str = "overpass"
 
 
 class GeocodeResult(BaseModel):

@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import candidates, config, geo, health, poi
 from .geocoding import PhotonGeocoder
+from .poi_store import LocalPoiStore
 from .cache import TTLCache
 from .gpx import build_gpx, filename_for
 from .models import (
@@ -72,6 +73,7 @@ def _search_key(query: SearchRequest) -> str:
 async def lifespan(app: FastAPI):
     app.state.engine = ORSEngine()
     app.state.geocoder = PhotonGeocoder()
+    app.state.poi_store = LocalPoiStore()
     app.state.http = httpx.AsyncClient(timeout=15.0)
     try:
         yield
@@ -97,10 +99,13 @@ async def options() -> Dict[str, object]:
 
 @app.get("/api/healthz")
 async def healthz() -> Dict[str, object]:
+    store = app.state.poi_store
     return {
         "ok": True,
         "routing_engine": app.state.engine.name,
         "routing_configured": app.state.engine.configured,
+        "poi_source": "local" if store.available else "overpass",
+        "poi_local_count": store.count,
     }
 
 
@@ -225,12 +230,21 @@ async def pois(request: PoiRequest) -> PoiResponse:
 
     cache_key = "|".join(sorted(routes))
     cached = poi_cache.get(cache_key)
+    corridor = poi.corridor(list(routes.values()))
+
     if cached is not None:
-        found, ok = cached, True
+        found, ok, source = cached, True, "cache"
+    elif app.state.poi_store.covers(corridor):
+        # The local extract answers in milliseconds and cannot be too busy.
+        found = app.state.poi_store.near(corridor, poi.DEFAULT_RADIUS_M)
+        ok, source = True, "local"
+        if found:
+            poi_cache.set(cache_key, found)
     else:
-        found, ok = await poi.fetch(
-            poi.corridor(list(routes.values())), client=app.state.http
-        )
+        # Outside the extract, Overpass is the only option — slower, and
+        # sometimes unavailable, but it covers the planet.
+        found, ok = await poi.fetch(corridor, client=app.state.http)
+        source = "overpass"
         # Only a result with something in it is worth keeping. Overpass
         # sometimes succeeds with nothing, and caching that would lock the
         # page into a bad answer for an hour.
@@ -261,6 +275,7 @@ async def pois(request: PoiRequest) -> PoiResponse:
         monument_kinds=config.MONUMENT_KINDS,
         nature_kinds=config.NATURE_KINDS,
         available=ok,
+        source=source,
     )
 
 

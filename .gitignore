@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .env
 .pytest_cache/
+
+# OSM extracts and the built POI database — large, and rebuildable.
+data/
