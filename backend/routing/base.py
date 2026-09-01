@@ -71,11 +71,5 @@ class RoutingEngine:
         """
         raise NotImplementedError
 
-    async def geocode(
-        self, text: str, near: Optional[Tuple[float, float]] = None
-    ) -> List[Dict[str, object]]:
-        """Look up place names, biased towards ``near`` when given."""
-        raise NotImplementedError
-
     async def aclose(self) -> None:
         return None

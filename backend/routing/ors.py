@@ -347,6 +347,160 @@ class ORSEngine(RoutingEngine):
 
         return self._parse_all(payload), []
 
+    @staticmethod
+    def _parse_feature(feature: Dict[str, Any], seed: Optional[int]) -> RawRoute:
+        coordinates = feature.get("geometry", {}).get("coordinates") or []
+        if len(coordinates) < 2:
+            raise RoutingError("degenerate route")
+
+        properties = feature.get("properties", {}) or {}
+        summary = properties.get("summary", {}) or {}
+        extras = properties.get("extras", {}) or {}
+
+        return RawRoute(
+            coordinates=[list(c) for c in coordinates],
+            distance_m=float(summary.get("distance", 0.0)),
+            duration_s=summary.get("duration"),
+            ascent_m=properties.get("ascent"),
+            descent_m=properties.get("descent"),
+            surface=_extras_to_distance(extras, "surface"),
+            waytype=_extras_to_distance(extras, "waytype"),
+            seed=seed,
+        )
+
+    @classmethod
+    def _parse(cls, payload: Dict[str, Any], seed: int) -> RawRoute:
+        features = payload.get("features") or []
+        if not features:
+            raise RoutingError("no route found")
+        return cls._parse_feature(features[0], seed)
+
+    @classmethod
+    def _parse_all(cls, payload: Dict[str, Any]) -> List[RawRoute]:
+        """Every alternative ORS returned, skipping any that came back broken."""
+        routes: List[RawRoute] = []
+        for index, feature in enumerate(payload.get("features") or []):
+            try:
+                routes.append(cls._parse_feature(feature, index))
+            except RoutingError:
+                continue
+        if not routes:
+            raise RoutingError("no route found")
+        return routes
+
+    async def point_to_point(
+        self,
+        start: Tuple[float, float],
+        end: Tuple[float, float],
+        sport: str,
+        surface: str,
+        length_m: Optional[float] = None,
+    ) -> Tuple[List[RawRoute], List[str]]:
+        if not self.configured:
+            raise RoutingError("ORS_API_KEY is not set")
+
+        profile = self._profile(sport, surface)
+
+        straight_m = geo.haversine_m(start[1], start[0], end[1], end[0])
+        wants_detour = (
+            length_m is not None
+            and straight_m > 0
+            and length_m > straight_m * config.DETOUR_MIN_RATIO
+        )
+        if wants_detour:
+            routes, notices = await self._detour_routes(
+                profile, start, end, length_m, straight_m
+            )
+            if routes:
+                return routes, notices
+            # Nothing threaded through; fall back to the direct alternatives
+            # rather than returning an empty page.
+            notices = notices + ["detour_unavailable"]
+            direct, more = await self._alternative_routes(profile, start, end)
+            return direct, notices + more
+
+        notices = [] if length_m is None else ["distance_below_direct"]
+        routes, more = await self._alternative_routes(profile, start, end)
+        return routes, notices + more
+
+    async def _detour_routes(
+        self,
+        profile: str,
+        start: Tuple[float, float],
+        end: Tuple[float, float],
+        length_m: float,
+        straight_m: float,
+    ) -> Tuple[List[RawRoute], List[str]]:
+        """Route A -> via -> B for a spread of via points on the length ellipse."""
+        budget = max(length_m / config.DETOUR_ROAD_FACTOR, straight_m * 1.05)
+        vias = geo.ellipse_via_points(start, end, budget, config.DETOUR_VIA_COUNT)
+        if not vias:
+            return [], []
+
+        async def one(index: int, via: Tuple[float, float]) -> RawRoute:
+            body = {
+                "coordinates": [
+                    [start[1], start[0]],
+                    [via[1], via[0]],
+                    [end[1], end[0]],
+                ],
+                "elevation": True,
+                "instructions": False,
+                "extra_info": ["surface", "waytype", "steepness"],
+            }
+            return self._parse(await self._post_directions(profile, body), index)
+
+        settled = await asyncio.gather(
+            *[one(i, via) for i, via in enumerate(vias)], return_exceptions=True
+        )
+
+        routes: List[RawRoute] = []
+        failures: Dict[str, int] = {}
+        for item in settled:
+            if isinstance(item, RawRoute):
+                routes.append(item)
+            elif isinstance(item, BaseException):
+                reason = str(item) or type(item).__name__
+                failures[reason] = failures.get(reason, 0) + 1
+
+        notices = [
+            "{} of {} detour candidates failed ({})".format(count, len(vias), reason)
+            for reason, count in failures.items()
+        ]
+        return routes, notices
+
+    async def _alternative_routes(
+        self,
+        profile: str,
+        start: Tuple[float, float],
+        end: Tuple[float, float],
+    ) -> Tuple[List[RawRoute], List[str]]:
+        body = {
+            "coordinates": [[start[1], start[0]], [end[1], end[0]]],
+            "elevation": True,
+            "instructions": False,
+            "extra_info": ["surface", "waytype", "steepness"],
+            "alternative_routes": {
+                "target_count": config.ALTERNATIVE_TARGET_COUNT,
+                "weight_factor": config.ALTERNATIVE_WEIGHT_FACTOR,
+                "share_factor": config.ALTERNATIVE_SHARE_FACTOR,
+            },
+        }
+
+        try:
+            payload = await self._post_directions(profile, body)
+        except RoutingError as exc:
+            # Alternatives are refused on some geometries (very short hops, or
+            # when no sufficiently distinct second path exists). One route is a
+            # better answer than an error page.
+            if "alternative" not in str(exc).lower() and "2010" not in str(exc):
+                raise
+            body.pop("alternative_routes")
+            payload = await self._post_directions(profile, body)
+            return self._parse_all(payload), ["alternatives_unavailable"]
+
+        return self._parse_all(payload), []
+
     async def geocode(
         self, text: str, near: Optional[Tuple[float, float]] = None
     ) -> List[Dict[str, object]]:

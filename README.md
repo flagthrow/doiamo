@@ -49,7 +49,7 @@ The only credential needed is an [OpenRouteService](https://openrouteservice.org
 key (free). Weather and air quality come from Open-Meteo, which needs no key.
 
 ```bash
-./.venv/bin/python -m pytest -q     # 106 tests, no network needed
+./.venv/bin/python -m pytest -q     # 119 tests, no network needed
 ```
 
 ## Working without an API key
@@ -91,9 +91,8 @@ pins the geometry to within 60 m.
 A target distance is scored identically in both modes, and so is a target
 climb; what changes is only whether there *is* one.
 
-Start and finish are typed as place names (ORS geocoding, proxied so the API key
-never reaches the browser), dropped on the map, or taken from the browser's
-location. Typing in a field clears the point it had resolved to, so the text and
+Start and finish are typed as place names, dropped on the map with the picker,
+or taken from the browser's location. Typing in a field clears the point it had resolved to, so the text and
 the coordinates can never disagree.
 
 ## How a search works
@@ -159,6 +158,24 @@ couple of metres and a 10 km route has thousands of samples. Gain here is
 smoothed with a moving average, then accumulated with a 3 m hysteresis
 threshold. `tests/test_geo.py` pins this: same input, naive method says 300 m+,
 this one says under 20 m.
+
+## Place search
+
+Geocoding goes to [Photon](https://photon.komoot.io), not openrouteservice.
+Photon is keyless and has no daily allowance — it throttles above roughly five
+requests a second instead — and it is built for type-ahead, which matters
+because autocomplete spends a request per keystroke batch. The ORS geocoder is
+capped at 1000/day, which would have run out well before the routing quota did.
+Moving off it leaves the whole ORS allowance for routing.
+
+Nominatim was the other candidate and is rejected on purpose: its usage policy
+is one request per second, which an autocomplete field violates immediately.
+
+Results are deduplicated **on the visible label**, not on position — Photon
+returns a large park as a node, a way and a street, sometimes hundreds of metres
+apart, and three identical lines in a dropdown help nobody. The city is part of
+the label, so "Colosseo, Roma" and "Colosseo, Milano" stay distinct. Repeated
+prefixes are cached, which absorbs most of the typing.
 
 ## Map views
 
@@ -239,6 +256,7 @@ three**, failing with a server-side timeout rather than a rate limit. So:
 ```
 backend/
   main.py          FastAPI: /api/search, /api/pois, /api/geocode, /api/gpx/{id}, /api/options
+  geocoding.py     Photon place search — keyless, no daily allowance
   poi.py           Overpass lookup for water, toilets, viewpoints, monuments
   candidates.py    generation, filtering, dedupe, multi-objective scoring
   geo.py           distance, bearing, smoothed elevation gain, headwind

@@ -104,7 +104,6 @@ class StubEngine(RoutingEngine):
 
     def __init__(self):
         self.point_calls = []
-        self.geocode_calls = []
 
     async def point_to_point(self, start, end, sport, surface, length_m=None):
         self.point_calls.append((start, end, sport, surface, length_m))
@@ -117,11 +116,6 @@ class StubEngine(RoutingEngine):
 
     async def round_trips(self, lat, lon, length_m, sport, surface, seeds):
         return [line(distance_m=10000.0)], []
-
-    async def geocode(self, text, near=None):
-        self.geocode_calls.append((text, near))
-        return [{"label": "Parco Sempione, Milano", "lat": 45.4725, "lon": 9.1745,
-                 "region": "Lombardia"}]
 
     async def aclose(self):
         return None
@@ -202,30 +196,47 @@ def test_gpx_download_works_for_a_route(client):
     assert "<trkpt" in response.text
 
 
-def test_geocode_returns_places(client):
+def test_geocode_returns_places(client, monkeypatch):
+    async def fake_search(text, near=None):
+        fake_search.calls.append((text, near))
+        return [{"label": "Parco Sempione, Milano", "lat": 45.4725, "lon": 9.1745,
+                 "region": "Lombardia, Italia"}]
+    fake_search.calls = []
+    monkeypatch.setattr(client.app.state.geocoder, "search", fake_search)
+
     data = client.get(
         "/api/geocode", params={"q": "sempione", "lat": 45.4642, "lon": 9.19}
     ).json()
     assert data[0]["label"] == "Parco Sempione, Milano"
     assert data[0]["lat"] == 45.4725
-    text, near = client.app.state.engine.geocode_calls[0]
+    text, near = fake_search.calls[0]
     assert text == "sempione"
     assert near == (45.4642, 9.19)   # biased towards what the map is showing
 
 
-def test_geocode_ignores_too_short_a_query(client):
+def test_geocode_ignores_too_short_a_query(client, monkeypatch):
+    called = []
+
+    async def fake_search(text, near=None):
+        called.append(text)
+        return []
+    monkeypatch.setattr(client.app.state.geocoder, "search", fake_search)
+
     assert client.get("/api/geocode", params={"q": "a"}).json() == []
-    assert client.app.state.engine.geocode_calls == []
+    assert called == []
 
 
-def test_geocode_without_a_viewpoint_sends_no_focus(client):
+def test_geocode_without_a_viewpoint_sends_no_focus(client, monkeypatch):
+    seen = []
+
+    async def fake_search(text, near=None):
+        seen.append(near)
+        return []
+    monkeypatch.setattr(client.app.state.geocoder, "search", fake_search)
+
     client.get("/api/geocode", params={"q": "duomo"})
-    assert client.app.state.engine.geocode_calls[0][1] is None
+    assert seen[0] is None
 
-
-def test_geocode_focus_works_anywhere_not_just_two_cities(client):
-    client.get("/api/geocode", params={"q": "gare du nord", "lat": 48.8566, "lon": 2.3522})
-    assert client.app.state.engine.geocode_calls[0][1] == (48.8566, 2.3522)
 
 
 # --- detour geometry ------------------------------------------------------

@@ -150,39 +150,6 @@ class OfflineEngine(RoutingEngine):
             routes.append(self._raw(coords, distance, i))
         return routes, []
 
-    async def geocode(self, text, near=None):
-        """Nominatim: free, keyless, and real — so the search box behaves."""
-        import httpx
-
-        params = {"q": text, "format": "jsonv2", "limit": 6, "addressdetails": 1}
-        if near:
-            params["viewbox"] = "{},{},{},{}".format(
-                near[1] - 0.3, near[0] + 0.3, near[1] + 0.3, near[0] - 0.3
-            )
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params=params,
-                    headers={"User-Agent": "Doiamo-dev/0.1 (+https://doiamo.com)"},
-                )
-                response.raise_for_status()
-                rows = response.json()
-        except Exception:
-            return []
-
-        out = []
-        for row in rows:
-            address = row.get("address") or {}
-            out.append({
-                "label": row.get("display_name", "").split(",")[0]
-                         + (", " + address["city"] if address.get("city") else ""),
-                "lat": float(row["lat"]),
-                "lon": float(row["lon"]),
-                "region": address.get("state") or address.get("county"),
-            })
-        return out
-
     @staticmethod
     def _raw(coords, distance_m: float, index: int) -> RawRoute:
         surface = SURFACE_MIXES[index % len(SURFACE_MIXES)]

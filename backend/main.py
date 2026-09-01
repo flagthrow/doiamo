@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import candidates, config, geo, health, poi
+from .geocoding import PhotonGeocoder
 from .cache import TTLCache
 from .gpx import build_gpx, filename_for
 from .models import (
@@ -70,11 +71,13 @@ def _search_key(query: SearchRequest) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = ORSEngine()
+    app.state.geocoder = PhotonGeocoder()
     app.state.http = httpx.AsyncClient(timeout=15.0)
     try:
         yield
     finally:
         await app.state.engine.aclose()
+        await app.state.geocoder.aclose()
         await app.state.http.aclose()
 
 
@@ -259,7 +262,11 @@ async def pois(request: PoiRequest) -> PoiResponse:
 async def geocode(
     q: str, lat: Optional[float] = None, lon: Optional[float] = None
 ) -> List[GeocodeResult]:
-    """Place-name lookup, proxied so the routing key stays on the server.
+    """Place-name lookup through Photon.
+
+    Keyless and without a daily allowance, unlike the openrouteservice
+    geocoder — which matters because autocomplete spends a request per
+    keystroke batch and would exhaust 1000/day long before routing ran out.
 
     ``lat``/``lon`` bias results towards what the user is currently looking at,
     which is what makes "via Roma" resolve to the one down the road.
@@ -268,20 +275,8 @@ async def geocode(
     if len(text) < 2:
         return []
 
-    engine = app.state.engine
-    if not engine.configured:
-        raise HTTPException(
-            status_code=503,
-            detail="ORS_API_KEY is not set. Get a free key at openrouteservice.org.",
-        )
-
-    focus = (lat, lon) if lat is not None and lon is not None else None
-
-    try:
-        results = await engine.geocode(text, near=focus)
-    except RoutingError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-
+    near = (lat, lon) if lat is not None and lon is not None else None
+    results = await app.state.geocoder.search(text, near=near)
     return [GeocodeResult(**item) for item in results]
 
 

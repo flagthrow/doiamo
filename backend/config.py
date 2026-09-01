@@ -30,7 +30,7 @@ SEARCH_CACHE_MAX = int(os.environ.get("SEARCH_CACHE_MAX", "500"))
 # setting off "from the Duomo" shares one set of routes.
 SEARCH_CACHE_PRECISION = int(os.environ.get("SEARCH_CACHE_PRECISION", "3"))
 
-ORS_GEOCODE_SIZE = int(os.environ.get("ORS_GEOCODE_SIZE", "6"))
+GEOCODE_RESULTS = int(os.environ.get("GEOCODE_RESULTS", "6"))
 
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_AIR = "https://air-quality-api.open-meteo.com/v1/air-quality"
