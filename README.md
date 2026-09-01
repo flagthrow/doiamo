@@ -259,8 +259,10 @@ three**, failing with a server-side timeout rather than a rate limit. So:
   of circles along the route, and if the spacing exceeds twice the radius the
   gaps between them are never searched. A fixed 30 points per route put 75 m
   circles 300 m apart on a 10 km loop — half of it was invisible.
-- **Three retry rounds across two mirrors**, because failures are transient and
-  uncorrelated.
+- **Retries share one 25-second budget.** Retrying makes failure rarer but
+  slower, and the two multiply: three rounds over two mirrors at 25s each was
+  150 seconds of someone watching a spinner. Attempts now run until the budget
+  is spent, alternating mirrors.
 - **Successful results are cached**, so a retry or a reload does not re-roll the
   dice. Empty successes are not cached.
 - **Regional instances are excluded.** `overpass.osm.ch` answers every request

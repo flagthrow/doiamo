@@ -7,6 +7,7 @@ already on screen.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import httpx
@@ -24,9 +25,12 @@ OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
-OVERPASS_TIMEOUT_S = 25.0
-OVERPASS_ROUNDS = 3
-OVERPASS_RETRY_DELAY_S = 1.5
+# Retrying makes failure rarer but slower, and the two multiply: three rounds
+# over two mirrors at 25s each is 150 seconds of someone watching a spinner.
+# So the whole lookup gets one budget, and attempts run until it is spent.
+OVERPASS_BUDGET_S = 25.0
+OVERPASS_ATTEMPT_TIMEOUT_S = 11.0
+OVERPASS_RETRY_DELAY_S = 1.0
 
 # Overpass answers 406 to a default library user agent, and its usage policy
 # asks callers to identify themselves. Both reasons to send a real one.
@@ -192,26 +196,29 @@ async def fetch(
         client = httpx.AsyncClient(timeout=OVERPASS_TIMEOUT_S)
     try:
         payload = None
-        for attempt in range(OVERPASS_ROUNDS):
-            for url in OVERPASS_URLS:
-                try:
-                    response = await client.post(
-                        url,
-                        data={"data": query},
-                        headers={"User-Agent": USER_AGENT},
-                        timeout=OVERPASS_TIMEOUT_S,
-                    )
-                    response.raise_for_status()
-                    payload = response.json()
-                    break
-                except (httpx.HTTPError, ValueError):
-                    # "Too busy" is transient and uncorrelated between hosts,
-                    # so the next mirror — or the next round — often works.
-                    continue
-            if payload is not None:
+        deadline = time.monotonic() + OVERPASS_BUDGET_S
+        attempt = 0
+        while payload is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 1.0:
                 break
-            if attempt + 1 < OVERPASS_ROUNDS:
-                await asyncio.sleep(OVERPASS_RETRY_DELAY_S)
+            url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
+            attempt += 1
+            try:
+                response = await client.post(
+                    url,
+                    data={"data": query},
+                    headers={"User-Agent": USER_AGENT},
+                    # Never let one slow attempt eat the whole budget.
+                    timeout=min(OVERPASS_ATTEMPT_TIMEOUT_S, remaining),
+                )
+                response.raise_for_status()
+                payload = response.json()
+            except (httpx.HTTPError, ValueError):
+                # "Too busy" is transient and uncorrelated between hosts, so
+                # the next mirror often works — if there is time left to try.
+                if deadline - time.monotonic() > 1.0:
+                    await asyncio.sleep(OVERPASS_RETRY_DELAY_S)
         if payload is None:
             return [], False
     finally:

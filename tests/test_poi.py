@@ -81,6 +81,18 @@ def _transport(handler):
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
+@pytest.fixture(autouse=True)
+def _fast_overpass(monkeypatch):
+    """Shrink the retry budget so failure tests do not spend the real one.
+
+    The production values are asserted separately, in
+    test_the_retry_budget_is_bounded.
+    """
+    monkeypatch.setattr(poi, "OVERPASS_BUDGET_S", 3.0)
+    monkeypatch.setattr(poi, "OVERPASS_ATTEMPT_TIMEOUT_S", 1.0)
+    monkeypatch.setattr(poi, "OVERPASS_RETRY_DELAY_S", 0.05)
+
+
 @pytest.mark.asyncio
 async def test_fetch_identifies_itself():
     """Overpass answers 406 to a default library user agent — this is the
@@ -400,3 +412,60 @@ def test_the_single_clause_still_reaches_every_category():
     for value in ("drinking_water", "toilets", "park", "viewpoint", "artwork",
                   "bicycle", "monument", "memorial", "castle"):
         assert value in query
+
+
+# --- how long a user can be made to wait -----------------------------------
+
+@pytest.mark.asyncio
+async def test_a_failing_lookup_gives_up_within_the_budget():
+    """Retrying makes failure rarer but slower, and the two multiply. Three
+    rounds over two mirrors at 25s each was 150 seconds of spinner."""
+    import time
+
+    attempts = []
+
+    def handler(request):
+        attempts.append(1)
+        raise httpx.ConnectTimeout("no answer")
+
+    started = time.monotonic()
+    async with _transport(handler) as client:
+        found, ok = await poi.fetch([(45.47, 9.17)], client=client)
+    elapsed = time.monotonic() - started
+
+    assert (found, ok) == ([], False)
+    assert elapsed < 5                    # bounded, not 150 seconds
+    assert len(attempts) > 1              # and it did keep trying
+
+
+def test_the_retry_budget_is_bounded():
+    """Asserted against the real module values, not the shrunk test ones."""
+    import importlib
+
+    fresh = importlib.reload(poi)
+    try:
+        assert fresh.OVERPASS_BUDGET_S <= 30
+        assert fresh.OVERPASS_ATTEMPT_TIMEOUT_S < fresh.OVERPASS_BUDGET_S
+    finally:
+        importlib.reload(poi)
+
+
+@pytest.mark.asyncio
+async def test_it_still_retries_within_the_budget():
+    """A bounded budget must not mean a single attempt."""
+    hits = []
+
+    def handler(request):
+        hits.append(str(request.url))
+        if len(hits) == 1:
+            return httpx.Response(504, text="too busy")
+        return httpx.Response(200, json={"elements": [
+            {"type": "node", "id": 1, "lat": 45.47, "lon": 9.17,
+             "tags": {"amenity": "drinking_water"}}]})
+
+    async with _transport(handler) as client:
+        found, ok = await poi.fetch([(45.47, 9.17)], client=client)
+
+    assert ok is True and len(found) == 1
+    assert len(hits) == 2
+    assert hits[0] != hits[1]      # moved to the other mirror
