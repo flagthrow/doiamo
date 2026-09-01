@@ -1,0 +1,625 @@
+/* Doiamo — palette contrasts verified against the surfaces below.
+   Light: accent #0e7c53 carries white text at 5.22:1; the brighter #10a26a is
+   mark-only at 3.28:1 on white. Dark: #2fd08f sits at 8.73:1 on #171b19 and
+   carries near-black text at 10.5:1. Ink steps clear 4.5:1 in both modes. */
+
+:root {
+  --page: #f4f6f4;
+  --card: #ffffff;
+  --card-sunken: #eef1ef;
+  --ink: #0d1512;
+  --ink-2: #39433d;
+  --ink-3: #6b7772;
+  --line: #e2e7e4;
+  --line-strong: #ccd5d0;
+
+  --accent: #0e7c53;          /* interactive: buttons, links, on-accent text */
+  --accent-mark: #10a26a;     /* data marks only */
+  --accent-wash: #e7f4ee;
+  --accent-ink: #ffffff;      /* text sitting on --accent */
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-hero: 22px;
+
+  --shadow-1: 0 1px 2px rgba(13, 21, 18, .05);
+  --shadow-2: 0 2px 4px rgba(13, 21, 18, .04), 0 8px 20px -6px rgba(13, 21, 18, .10);
+  --shadow-3: 0 4px 10px rgba(13, 21, 18, .06), 0 24px 60px -18px rgba(13, 21, 18, .22);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0e1210;
+    --card: #171b19;
+    --card-sunken: #101513;
+    --ink: #eef2f0;
+    --ink-2: #a8b4ae;
+    --ink-3: #7d8a84;
+    --line: #252b28;
+    --line-strong: #333b37;
+
+    --accent: #2fd08f;
+    --accent-mark: #25c489;
+    --accent-wash: #16241e;
+    --accent-ink: #07120d;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-2: 0 2px 4px rgba(0, 0, 0, .3), 0 8px 20px -6px rgba(0, 0, 0, .5);
+    --shadow-3: 0 4px 10px rgba(0, 0, 0, .4), 0 24px 60px -18px rgba(0, 0, 0, .65);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Class rules such as `.field { display: flex }` outrank the user agent's
+   `[hidden] { display: none }`, so hiding has to win explicitly. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -.011em;
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.app { display: flex; flex-direction: column; height: 100dvh; }
+
+/* View switching: the hero and the results view never coexist. */
+body[data-view="home"] #appView { display: none; }
+body[data-view="app"] .home { display: none; }
+body[data-view="home"] header .tagline { display: none; }
+
+/* On the home view the header sits on top of the dark cover, so it takes the
+   cover's colours rather than the theme's. */
+body[data-view="home"] header {
+  background: #0b0f0d;
+  border-bottom-color: rgba(255, 255, 255, .07);
+}
+body[data-view="home"] header h1 { color: #ffffff; }
+body[data-view="home"] header h1 span { color: #2fd08f; }
+body[data-view="home"] header .lang { background: rgba(255, 255, 255, .10); }
+body[data-view="home"] header .lang button { color: rgba(255, 255, 255, .65); }
+body[data-view="home"] header .lang button:hover { color: #ffffff; }
+body[data-view="home"] header .lang button[aria-pressed="true"] {
+  background: #2fd08f; color: #07120d;
+}
+
+/* ---------- header ---------- */
+
+header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: saturate(1.6) blur(12px);
+  border-bottom: 1px solid var(--line);
+  z-index: 500;
+}
+.brand {
+  background: none; border: 0; padding: 0; cursor: pointer; color: inherit;
+  font: inherit; text-align: left;
+}
+header h1 { font-size: 18px; margin: 0; font-weight: 660; letter-spacing: -.03em; }
+header h1 span { color: var(--accent); }
+header .tagline { color: var(--ink-3); font-size: 12.5px; margin: 0; }
+header .spacer { flex: 1; }
+
+.ghost-btn {
+  background: var(--card-sunken); border: 0; color: var(--accent);
+  padding: 7px 13px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 580;
+  transition: background .15s;
+}
+.ghost-btn:hover { background: var(--accent-wash); }
+
+/* ---------- segmented pills ---------- */
+
+.lang, .segmented {
+  display: flex; gap: 3px; padding: 3px;
+  background: var(--card-sunken); border-radius: 999px;
+}
+.lang button, .segmented button {
+  flex: 1; border: 0; background: transparent; color: var(--ink-3);
+  border-radius: 999px; cursor: pointer; font: inherit; font-weight: 550;
+  transition: color .15s, background .15s, box-shadow .15s;
+}
+.lang button { padding: 4px 11px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
+.segmented { border-radius: var(--r-md); padding: 3px; }
+.segmented button { padding: 9px 10px; font-size: 13.5px; border-radius: 9px; }
+
+.lang button[aria-pressed="true"],
+.segmented button[aria-pressed="true"] {
+  background: var(--card); color: var(--accent); box-shadow: var(--shadow-1);
+}
+.lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.lang button:hover, .segmented button:hover { color: var(--ink); }
+.lang button[aria-pressed="true"]:hover { color: var(--accent-ink); }
+.segmented button[aria-pressed="true"]:hover { color: var(--accent); }
+
+/* ---------- hero ---------- */
+
+/* The hero is always dark, in both themes: it is a cover, and a cover that
+   changes with the OS setting stops being an identity. */
+.home { flex: 1; min-height: 0; overflow-y: auto; }
+
+.hero {
+  position: relative;
+  min-height: min(760px, calc(100dvh - 58px));
+  display: grid; place-items: center;
+  padding: clamp(20px, 4vh, 44px) 20px clamp(32px, 6vh, 64px);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero-map { position: absolute; inset: 0; z-index: 0; }
+.hero-map .leaflet-container { background: #0b0f0d; }
+/* Attribution is a licence condition, so it stays — just quietened. */
+.hero-map .leaflet-control-attribution {
+  background: rgba(0, 0, 0, .45) !important;
+  color: rgba(255, 255, 255, .5) !important;
+}
+.hero-map .leaflet-control-attribution a { color: rgba(255, 255, 255, .7) !important; }
+
+.hero-scrim {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(85% 65% at 50% 40%, rgba(6, 12, 9, .10) 0%, rgba(6, 12, 9, .66) 72%),
+    linear-gradient(180deg, rgba(6, 12, 9, .62) 0%, rgba(6, 12, 9, .30) 42%, rgba(6, 12, 9, .86) 100%);
+}
+
+/* The route drawing itself in is the one piece of motion on the page. */
+.hero-route { stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero-route { animation: draw 3.2s cubic-bezier(.36, .1, .2, 1) forwards; }
+}
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+.hero-inner { position: relative; z-index: 2; width: 100%; max-width: 560px; text-align: center; }
+
+.headline {
+  margin: 0 0 12px;
+  font-size: clamp(32px, 5.4vw, 54px);
+  line-height: 1.03;
+  font-weight: 680;
+  letter-spacing: -.042em;
+  color: #ffffff;
+  text-wrap: balance;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, .4);
+}
+.hero-sub {
+  margin: 0 auto 22px; max-width: 440px;
+  font-size: clamp(15px, 1.8vw, 17px);
+  color: rgba(255, 255, 255, .78);
+  text-wrap: balance;
+}
+.hero-slot .panel {
+  text-align: left;
+  border-radius: var(--r-hero);
+  padding: 18px;
+  gap: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .3), 0 32px 70px -20px rgba(0, 0, 0, .55);
+}
+.hero-note {
+  margin: 20px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, .62);
+}
+
+/* ---------- pitch ---------- */
+
+.pitch {
+  padding: clamp(48px, 9vh, 88px) 20px clamp(56px, 10vh, 96px);
+  background: var(--page);
+}
+.pitch-title {
+  margin: 0 auto clamp(28px, 5vh, 44px); max-width: 620px;
+  text-align: center;
+  font-size: clamp(21px, 3vw, 30px);
+  line-height: 1.18; font-weight: 660; letter-spacing: -.032em;
+  text-wrap: balance;
+}
+.pitch-grid {
+  display: grid; gap: 14px; max-width: 1000px; margin: 0 auto;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.pitch-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 22px;
+  box-shadow: var(--shadow-1);
+}
+.pitch-icon {
+  width: 38px; height: 38px; border-radius: 11px; margin-bottom: 14px;
+  display: grid; place-items: center;
+  background: var(--accent-wash); color: var(--accent);
+}
+.pitch-card h4 {
+  margin: 0 0 7px; font-size: 16.5px; font-weight: 640; letter-spacing: -.024em;
+}
+.pitch-card p { margin: 0; font-size: 13.5px; color: var(--ink-3); line-height: 1.55; }
+.pitch-foot {
+  margin: clamp(28px, 5vh, 44px) auto 0; text-align: center;
+  font-size: 12.5px; color: var(--ink-3);
+}
+
+/* ---------- shell ---------- */
+
+main { flex: 1; display: grid; grid-template-columns: 1fr 396px; min-height: 0; }
+
+#map { min-height: 0; }
+.leaflet-container { background: var(--page); font-family: inherit; }
+
+.sidebar {
+  background: var(--page); border-left: 1px solid var(--line);
+  overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+  scrollbar-width: thin;
+}
+.sidebar > * { flex-shrink: 0; }
+
+.panel {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 14px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: var(--shadow-1);
+}
+
+.field { display: flex; flex-direction: column; gap: 8px; position: relative; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-row .segmented button { padding: 9px 6px; font-size: 13px; }
+.field > .label {
+  font-size: 11px; font-weight: 600; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.hint { font-size: 12px; color: var(--ink-3); }
+.map-hint { color: var(--accent); font-weight: 500; }
+
+/* Distance and climb apply in both modes; only the "as direct as possible"
+   escape hatch is specific to A-to-B. */
+body[data-mode="loop"] .route-only { display: none !important; }
+.checkbox.standalone { padding: 2px 0; }
+
+/* ---------- place inputs ---------- */
+
+.place-input { position: relative; display: flex; align-items: center; }
+.field > label.checkbox.standalone { margin-top: -4px; }
+.place-input input {
+  width: 100%; padding: 11px 13px; padding-right: 72px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--card-sunken); color: var(--ink);
+  font: inherit; font-size: 14.5px;
+  transition: border-color .15s, background .15s;
+}
+.place-input input::placeholder { color: var(--ink-3); }
+.place-input input:focus {
+  outline: none; border-color: var(--accent);
+  background: var(--card); box-shadow: 0 0 0 3px var(--accent-wash);
+}
+#endField .place-input input { padding-right: 40px; }
+
+.pin-btn {
+  position: absolute; right: 5px;
+  display: grid; place-items: center;
+  width: 30px; height: 30px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink-3); cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.pin-btn:hover { color: var(--accent); background: var(--accent-wash); }
+#pickStart { right: 37px; }
+
+.place-field.resolved .place-input input { border-color: var(--accent); }
+
+.suggest {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 900;
+  margin: 6px 0 0; padding: 5px; list-style: none;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-3);
+  max-height: 240px; overflow-y: auto;
+}
+.suggest li {
+  padding: 9px 11px; border-radius: var(--r-sm); cursor: pointer;
+  font-size: 13.5px; line-height: 1.35;
+}
+.suggest li:hover, .suggest li[aria-selected="true"] { background: var(--accent-wash); }
+.suggest li .region { display: block; font-size: 11.5px; color: var(--ink-3); }
+.suggest li.empty { cursor: default; color: var(--ink-3); }
+.suggest li.empty:hover { background: transparent; }
+
+/* ---------- sliders ---------- */
+
+.slider-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.slider-row .value { font-size: 19px; font-weight: 640; letter-spacing: -.02em; }
+.slider-row .value .unit { font-size: 12px; font-weight: 500; color: var(--ink-3); margin-left: 2px; }
+
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 20px; margin: 0; background: transparent; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right,
+    var(--accent-mark) 0 var(--fill, 50%), var(--card-sunken) var(--fill, 50%) 100%);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right,
+    var(--accent-mark) 0 var(--fill, 50%), var(--card-sunken) var(--fill, 50%) 100%);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; margin-top: -6px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--accent-mark);
+  box-shadow: var(--shadow-2); transition: transform .12s;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--accent-mark); box-shadow: var(--shadow-2);
+}
+input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.12); }
+input[type="range"]:disabled { opacity: .45; cursor: not-allowed; }
+
+.field > label.checkbox {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--ink-3); cursor: pointer;
+  text-transform: none; letter-spacing: normal; font-weight: 450;
+}
+.field > label.checkbox input { accent-color: var(--accent-mark); width: 15px; height: 15px; }
+
+/* ---------- primary action ---------- */
+
+button.primary {
+  width: 100%; padding: 13px; border: 0; border-radius: var(--r-md);
+  background: var(--accent); color: var(--accent-ink);
+  font: inherit; font-size: 15px; font-weight: 620; letter-spacing: -.01em;
+  cursor: pointer; box-shadow: var(--shadow-2);
+  transition: filter .15s, transform .08s;
+}
+.hero-slot button.primary { padding: 15px; font-size: 16px; }
+button.primary:hover { filter: brightness(1.08); }
+button.primary:active { transform: translateY(1px); }
+button.primary:disabled { opacity: .6; cursor: progress; filter: none; transform: none; }
+
+/* ---------- notices ---------- */
+
+.notice {
+  font-size: 12.5px; line-height: 1.5; padding: 11px 13px; border-radius: var(--r-md);
+  background: var(--accent-wash); color: var(--ink-2); border: 1px solid transparent;
+}
+.notice.warn { background: transparent; border-color: var(--line-strong); color: var(--ink-2); }
+#messages:empty { display: none; }
+.panel #messages .notice { margin-top: -2px; }
+
+/* ---------- condition stat tiles ---------- */
+
+.context {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px;
+  background: var(--line); border: 1px solid var(--line);
+  border-radius: var(--r-lg); overflow: hidden;
+}
+.context .cell { background: var(--card); padding: 11px 13px; }
+.context .cell .k {
+  font-size: 10px; color: var(--ink-3); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.context .cell .v { font-size: 20px; font-weight: 640; letter-spacing: -.028em; margin-top: 1px; }
+.context .cell .v small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+
+/* ---------- results ---------- */
+
+.results { display: flex; flex-direction: column; gap: 10px; }
+
+.result {
+  border: 1px solid var(--line); border-radius: var(--r-lg);
+  padding: 13px; background: var(--card); cursor: pointer;
+  box-shadow: var(--shadow-1);
+  transition: border-color .15s, box-shadow .15s, transform .12s;
+}
+.result:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.result.active { border-color: var(--accent); box-shadow: var(--shadow-2), inset 0 0 0 1px var(--accent); }
+
+.result .head { display: flex; align-items: center; gap: 11px; }
+.result .rank {
+  width: 20px; height: 20px; border-radius: 6px; flex: none;
+  background: var(--card-sunken); color: var(--ink-3);
+  font-size: 11px; font-weight: 680; display: grid; place-items: center;
+}
+.result.active .rank { background: var(--accent-wash); color: var(--accent); }
+.result .main { flex: 1; min-width: 0; }
+.result .title { font-size: 17px; font-weight: 640; letter-spacing: -.028em; }
+.result .title .sep { color: var(--line-strong); margin: 0 5px; font-weight: 400; }
+.result .sub { color: var(--ink-3); font-size: 12.5px; margin-top: 1px; }
+
+.ring { position: relative; width: 46px; height: 46px; flex: none; }
+.ring svg { display: block; transform: rotate(-90deg); }
+.ring .ring-track { stroke: var(--card-sunken); }
+.ring .ring-fill {
+  stroke: var(--accent-mark); stroke-linecap: round;
+  transition: stroke-dashoffset .4s cubic-bezier(.4, 0, .2, 1);
+}
+.ring .ring-value {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 15px; font-weight: 660; letter-spacing: -.03em;
+}
+
+.bars { margin-top: 12px; display: grid; gap: 7px; }
+.bar {
+  display: grid; grid-template-columns: 104px 1fr 28px; gap: 10px;
+  align-items: center; font-size: 11.5px; color: var(--ink-3);
+}
+.bar .track { height: 6px; border-radius: 999px; background: var(--card-sunken); overflow: hidden; }
+.bar .fill {
+  height: 100%; background: var(--accent-mark); border-radius: 999px;
+  transition: width .4s cubic-bezier(.4, 0, .2, 1);
+}
+.bar .num { text-align: right; font-weight: 560; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.result .actions { margin-top: 12px; }
+.result .actions a {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 13px; border-radius: 999px;
+  background: var(--card-sunken); color: var(--accent);
+  font-size: 12.5px; font-weight: 580; text-decoration: none;
+  transition: background .15s;
+}
+.result .actions a:hover { background: var(--accent-wash); }
+
+footer { padding: 2px 4px 8px; font-size: 11px; color: var(--ink-3); }
+footer p { margin: 0 0 5px; }
+.disclaimer { line-height: 1.5; }
+.pitch-foot.disclaimer { margin-top: 8px; max-width: 620px; margin-left: auto; margin-right: auto; }
+
+/* ---------- map controls & marks ---------- */
+
+.map-styles {
+  display: flex; gap: 3px; padding: 3px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: saturate(1.6) blur(10px);
+  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-2);
+}
+.map-styles button {
+  border: 0; background: transparent; color: var(--ink-3);
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 550; white-space: nowrap;
+  transition: color .15s, background .15s;
+}
+.map-styles button:hover { color: var(--ink); }
+.map-styles button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.leaflet-control-zoom {
+  border: 1px solid var(--line) !important; border-radius: var(--r-md) !important;
+  overflow: hidden; box-shadow: var(--shadow-2) !important;
+}
+.leaflet-control-zoom a {
+  background: var(--card) !important; color: var(--ink) !important;
+  border-bottom-color: var(--line) !important;
+}
+.leaflet-control-zoom a:hover { background: var(--card-sunken) !important; }
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--card) 82%, transparent) !important;
+  color: var(--ink-3) !important; font-size: 10px;
+}
+.leaflet-control-attribution a { color: var(--ink-2) !important; }
+
+.start-dot, .end-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 3px solid var(--card);
+  box-shadow: var(--shadow-2), 0 0 0 1px rgba(13, 21, 18, .12);
+}
+.start-dot { background: var(--accent); }
+/* The finish reads as an outline so the two ends never look interchangeable. */
+.end-dot { background: var(--card); border-color: var(--accent); }
+
+/* ---------- map picker ---------- */
+
+.modal {
+  position: fixed; inset: 0; z-index: 2000;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(6, 12, 9, .55);
+  backdrop-filter: blur(3px);
+}
+.modal-card {
+  width: min(760px, 100%); max-height: min(620px, 92dvh);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-3);
+}
+.modal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line);
+}
+.modal-head h3 { margin: 0; font-size: 15.5px; font-weight: 620; letter-spacing: -.02em; flex: 1; }
+.modal-close {
+  border: 0; background: var(--card-sunken); color: var(--ink-3);
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  font-size: 20px; line-height: 1;
+}
+.modal-close:hover { color: var(--ink); }
+.modal-foot {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-top: 1px solid var(--line);
+}
+.modal-foot .primary { width: auto; flex: none; padding: 11px 18px; }
+.picker-coords { flex: 1; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.picker-wrap { position: relative; flex: 1; min-height: 300px; }
+.picker-map { position: absolute; inset: 0; }
+/* Pick by centring: the crosshair is the point, which works the same with a
+   mouse and a thumb. */
+.picker-cross {
+  position: absolute; top: 50%; left: 50%; z-index: 500;
+  width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  border-radius: 50%; pointer-events: none;
+  border: 3px solid var(--accent); background: var(--card);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .7), var(--shadow-2);
+}
+.picker-cross::after {
+  content: ""; position: absolute; left: 50%; top: 100%;
+  width: 2px; height: 10px; margin-left: -1px;
+  background: var(--accent);
+}
+
+/* ---------- points of interest ---------- */
+
+/* Identity comes from the glyph, never from colour alone: the markers all sit
+   on the same surface and are told apart by their symbol and their tooltip. */
+.poi-dot {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; line-height: 1;
+  background: var(--card); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-2);
+}
+
+.poi-legend {
+  display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; max-width: 260px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: saturate(1.6) blur(10px);
+  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-2);
+}
+.poi-legend button {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 0; background: transparent; color: var(--ink-3);
+  padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 550; white-space: nowrap;
+  transition: color .15s, background .15s;
+}
+.poi-legend button:hover { color: var(--ink); }
+.poi-legend button[aria-pressed="true"] { background: var(--accent-wash); color: var(--accent); }
+.poi-legend button .n { font-variant-numeric: tabular-nums; }
+.poi-legend .empty { padding: 5px 10px; font-size: 12px; color: var(--ink-3); }
+
+.poi-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.poi-badges .badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; padding: 3px 9px; border-radius: 999px;
+  background: var(--card-sunken); color: var(--ink-2);
+}
+.poi-badges .badge .n { font-weight: 620; font-variant-numeric: tabular-nums; }
+
+.leaflet-tooltip.poi-tip {
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2); font-size: 12px; font-weight: 500;
+  padding: 4px 8px;
+}
+.leaflet-tooltip.poi-tip::before { display: none; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; grid-template-rows: 42vh 1fr; }
+  .sidebar { border-left: 0; border-top: 1px solid var(--line); order: 2; padding: 14px; }
+  #map { order: 1; }
+  header .tagline { display: none; }
+  .bar { grid-template-columns: 96px 1fr 28px; }
+  .map-styles button { padding: 6px 9px; font-size: 11.5px; }
+  .hero { min-height: 0; padding-top: 24px; }
+  .pitch { padding-top: 40px; padding-bottom: 48px; }
+}

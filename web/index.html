@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Doiamo</title>
+  <meta name="description" content="Trova il percorso giusto per correre o pedalare a Milano e Roma.">
+  <meta name="theme-color" content="#0e7c53" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e1210" media="(prefers-color-scheme: dark)">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;620;640;660;680;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body data-view="home">
+
+<!-- The control panel is a single element that moves between the hero and the
+     sidebar, so there is only ever one set of inputs and one set of handlers. -->
+<template id="controlsTemplate"></template>
+
+<div class="app">
+  <header>
+    <button class="brand" id="brand" type="button">
+      <h1>doi<span>amo</span></h1>
+    </button>
+    <p class="tagline" data-i18n="tagline"></p>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="newSearch" data-i18n="searchAgain" hidden></button>
+    <div class="lang" id="lang">
+      <button data-lang="it" aria-pressed="true">it</button>
+      <button data-lang="en" aria-pressed="false">en</button>
+    </div>
+  </header>
+
+  <!-- ---------------- home ---------------- -->
+  <div class="home" id="home">
+    <section class="hero">
+      <!-- A live map rather than stock photography: licence-clean, and it is
+           the product rather than a mood board. -->
+      <div class="hero-map" id="heroMap"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-inner">
+        <h2 class="headline" data-i18n="headline"></h2>
+        <p class="hero-sub" data-i18n="tagline"></p>
+        <div class="hero-slot" id="heroSlot"></div>
+        <p class="hero-note" data-i18n="heroNote"></p>
+      </div>
+    </section>
+
+    <section class="pitch">
+      <h3 class="pitch-title" data-i18n="pitchTitle"></h3>
+      <div class="pitch-grid">
+        <article class="pitch-card">
+          <div class="pitch-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 6h10v2H4V6Zm0 5h16v2H4v-2Zm0 5h7v2H4v-2Z"/></svg>
+          </div>
+          <h4 data-i18n="pitch1Title"></h4>
+          <p data-i18n="pitch1Body"></p>
+        </article>
+        <article class="pitch-card">
+          <div class="pitch-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2c3 4.2 5.5 7.4 5.5 10.5A5.5 5.5 0 0 1 12 18a5.5 5.5 0 0 1-5.5-5.5C6.5 9.4 9 6.2 12 2Zm0 3.6c-2 2.9-3.5 5.3-3.5 6.9a3.5 3.5 0 0 0 7 0c0-1.6-1.5-4-3.5-6.9Z"/></svg>
+          </div>
+          <h4 data-i18n="pitch2Title"></h4>
+          <p data-i18n="pitch2Body"></p>
+        </article>
+        <article class="pitch-card">
+          <div class="pitch-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Zm0 2a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm1 3v4.2l3 1.8-.8 1.4L11 13V8h2Z"/></svg>
+          </div>
+          <h4 data-i18n="pitch3Title"></h4>
+          <p data-i18n="pitch3Body"></p>
+        </article>
+      </div>
+      <p class="pitch-foot" data-i18n="pitchFoot"></p>
+      <p class="pitch-foot disclaimer" data-i18n="disclaimer"></p>
+    </section>
+  </div>
+
+  <!-- ---------------- results ---------------- -->
+  <main id="appView">
+    <div id="map"></div>
+    <aside class="sidebar">
+      <div class="sidebar-slot" id="sidebarSlot"></div>
+      <div class="context" id="context" hidden></div>
+      <div class="results" id="results"></div>
+      <footer>
+        <p class="disclaimer" data-i18n="disclaimer"></p>
+        <p data-i18n="footer"></p>
+      </footer>
+    </aside>
+  </main>
+</div>
+
+<!-- ---------------- the movable control panel ---------------- -->
+<div class="panel" id="controls">
+  <div class="field place-field" id="startField">
+    <label class="label" for="startInput" data-i18n="start"></label>
+    <div class="place-input">
+      <input type="text" id="startInput" autocomplete="off" spellcheck="false">
+      <button class="pin-btn" id="pickStart" type="button" data-which="start">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 4.6-5.5 11.4-6.3 12.3a1 1 0 0 1-1.4 0C10.5 20.4 5 13.6 5 9a7 7 0 0 1 7-7Zm0 4.5A2.5 2.5 0 1 0 12 11a2.5 2.5 0 0 0 0-4.5Z"/>
+        </svg>
+      </button>
+      <button class="pin-btn" id="locate" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M12 2a1 1 0 0 1 1 1v1.06A8 8 0 0 1 19.94 11H21a1 1 0 1 1 0 2h-1.06A8 8 0 0 1 13 19.94V21a1 1 0 1 1-2 0v-1.06A8 8 0 0 1 4.06 13H3a1 1 0 1 1 0-2h1.06A8 8 0 0 1 11 4.06V3a1 1 0 0 1 1-1Zm0 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/>
+        </svg>
+      </button>
+    </div>
+    <ul class="suggest" id="startSuggest" hidden></ul>
+  </div>
+
+  <div class="field place-field" id="endField">
+    <label class="label" for="endInput" data-i18n="end"></label>
+    <div class="place-input">
+      <input type="text" id="endInput" autocomplete="off" spellcheck="false">
+      <button class="pin-btn" id="pickEnd" type="button" data-which="end">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 4.6-5.5 11.4-6.3 12.3a1 1 0 0 1-1.4 0C10.5 20.4 5 13.6 5 9a7 7 0 0 1 7-7Zm0 4.5A2.5 2.5 0 1 0 12 11a2.5 2.5 0 0 0 0-4.5Z"/>
+        </svg>
+      </button>
+    </div>
+    <ul class="suggest" id="endSuggest" hidden></ul>
+  </div>
+
+  <label class="checkbox standalone">
+    <input type="checkbox" id="loopMode">
+    <span data-i18n="loopToggle"></span>
+  </label>
+
+  <div class="field">
+    <div class="label" data-i18n="sport"></div>
+    <div class="segmented" id="sport">
+      <button data-value="running" aria-pressed="true" data-i18n="running"></button>
+      <button data-value="cycling" aria-pressed="false" data-i18n="cycling"></button>
+    </div>
+  </div>
+
+  <div class="field" id="distanceField">
+    <div class="slider-row">
+      <label class="label" for="distance" data-i18n="distance"></label>
+      <span class="value"><span id="distanceValue">10</span><span class="unit">km</span></span>
+    </div>
+    <input type="range" id="distance" min="2" max="60" step="1" value="10">
+    <label class="checkbox route-only">
+      <input type="checkbox" id="distanceAny" checked>
+      <span data-i18n="directAsPossible"></span>
+    </label>
+  </div>
+
+  <div class="field" id="gainField">
+    <div class="slider-row">
+      <label class="label" for="gain" data-i18n="gain"></label>
+      <span class="value"><span id="gainValue">150</span><span class="unit">m</span></span>
+    </div>
+    <input type="range" id="gain" min="0" max="1500" step="25" value="150">
+    <label class="checkbox">
+      <input type="checkbox" id="gainAny" checked>
+      <span data-i18n="gainAny"></span>
+    </label>
+  </div>
+
+  <div class="field">
+    <div class="label" data-i18n="surface"></div>
+    <div class="segmented" id="surface">
+      <button data-value="asphalt" aria-pressed="true" data-i18n="asphalt"></button>
+      <button data-value="mixed" aria-pressed="false" data-i18n="mixed"></button>
+      <button data-value="trail" aria-pressed="false" data-i18n="trail"></button>
+    </div>
+  </div>
+
+  <div id="messages"></div>
+  <button class="primary" id="search" data-i18n="search"></button>
+  <span class="hint map-hint" id="mapHint" hidden></span>
+</div>
+
+<div class="modal" id="picker" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="pickerTitle"></h3>
+      <button class="modal-close" id="pickerClose" type="button" aria-label="close">&times;</button>
+    </div>
+    <div class="picker-wrap">
+      <div class="picker-map" id="pickerMap"></div>
+      <div class="picker-cross" aria-hidden="true"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="picker-coords" id="pickerCoords"></span>
+      <button class="primary" id="pickerConfirm" data-i18n="pickConfirm"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="/static/i18n.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
