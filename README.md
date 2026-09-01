@@ -368,6 +368,41 @@ Rome and Milan OSM extracts fit comfortably on a small VPS, and self-hosting als
 removes the per-request throttle, which is what currently caps how many
 candidates a search can afford to consider.
 
+## Deploying
+
+`railpack.json` sets the start command, because the app object is at
+`backend.main:app` rather than the root `main.py` that Railpack looks for by
+default. `railway.json` points the health check at `/api/healthz`, which
+reports whether routing is configured and whether the local POI database was
+found.
+
+Set these as environment variables on the platform — `.env` is local only:
+
+| Variable | Why |
+|---|---|
+| `ORS_API_KEY` | routing. Without it `/api/search` answers a clear 503 |
+| `CANDIDATE_SEEDS` | `6` halves the ORS cost of a loop search |
+| `POI_DB` | path to the POI database, if it is not at `data/pois.sqlite` |
+
+The app runs without either: no key gives a readable error, and no database
+falls back to Overpass. It just runs slower.
+
+### Getting the POI database into the container
+
+`data/` is gitignored — 19 MB of derived data is not source, and the 576 MB
+extract certainly is not. Do **not** build it during deployment: that needs the
+extract, pyosmium with a build toolchain, and about thirteen minutes.
+
+Build it locally and get the SQLite file in one of these ways:
+
+- publish it as a release asset and `curl` it during the image build (cleanest);
+- commit it, accepting 19 MB in the repository;
+- upload it once to a persistent volume and point `POI_DB` at the mount.
+
+Note that the POI database is **derived from OpenStreetMap and therefore
+ODbL**, not MIT like the code. If you distribute the file, say so and attribute
+OpenStreetMap.
+
 ## Licence and non-commercial use
 
 The code is MIT (see `LICENSE`).
