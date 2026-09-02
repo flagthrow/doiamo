@@ -6,6 +6,8 @@ behaviour so the model is only ever asked for what it genuinely cannot do.
 import pytest
 
 from backend.intent import (
+    CLIMB_TARGETS,
+    RIDE_SIZES,
     FLAT_TARGET_M,
     HILLY_TARGET_M,
     Intent,
@@ -96,7 +98,30 @@ def test_wanting_it_flat(sentence):
     "40 km with lots of climbing",
 ])
 def test_wanting_the_hills(sentence):
-    assert read(sentence).elevation_gain_m == HILLY_TARGET_M
+    # The tier is the assertion, not the number: the same words mean a bigger
+    # climb on a bike than on foot, so the figure follows the sport.
+    parsed = read(sentence)
+    tiers = CLIMB_TARGETS[parsed.sport or "running"]
+    assert parsed.elevation_gain_m == tiers["hilly"]
+
+
+@pytest.mark.parametrize("sentence,sport", [
+    ("una corsa con un po' di dislivello", "running"),
+    ("un giro in bici con un po' di dislivello", "cycling"),
+])
+def test_the_same_words_scale_with_the_sport(sentence, sport):
+    parsed = read(sentence)
+    assert parsed.sport == sport
+    assert parsed.elevation_gain_m == CLIMB_TARGETS[sport]["mild"]
+
+
+def test_a_bike_ride_asks_more_of_the_word_flat_than_a_run():
+    assert (
+        CLIMB_TARGETS["cycling"]["flat"] > CLIMB_TARGETS["running"]["flat"]
+    )
+    assert (
+        CLIMB_TARGETS["cycling"]["hilly"] > CLIMB_TARGETS["running"]["hilly"]
+    )
 
 
 def test_silence_about_hills_sets_no_target():
@@ -396,6 +421,19 @@ def test_an_unwritable_path_is_not_fatal(tmp_path):
 
 # --- cache keying ----------------------------------------------------------
 
+def test_cache_key_changes_with_the_rules():
+    """A regex fix is worthless if the old reading is still served from disk."""
+    import io as _io
+    import os as _os
+
+    from backend import intent as module
+
+    source = _io.open(_os.path.abspath(module.__file__), encoding="utf-8").read()
+    assert module.PARSER_VERSION == module.hashlib.sha256(
+        "\x00".join([module.SYSTEM, module.MODEL, source]).encode("utf-8")
+    ).hexdigest()[:8]
+
+
 def test_cache_key_changes_with_the_prompt():
     """A fixed prompt fixes nothing if the old answer is still served."""
     import hashlib
@@ -417,3 +455,106 @@ def test_cache_key_still_folds_case_and_spacing():
     assert module.cache_key("Voglio Correre 10 KM") == module.cache_key(
         "  voglio  correre 10 km "
     )
+
+
+# --- qualifier boundaries --------------------------------------------------
+
+def test_no_inside_intorno_does_not_flatten_the_route():
+    """The bug: "intorno" contains "no", so an unanchored LOW qualifier read
+    "intorno a L'Aquila con un po' di dislivello" as avoiding climb."""
+    from backend import intent as module
+
+    text = module.normalise("una corsetta intorno a l'aquila con un po' di dislivello")
+    assert module._climb(text) == module.MILD_TARGET_M
+
+
+def test_climb_qualifiers_only_match_whole_words():
+    from backend import intent as module
+
+    for sentence in ("giro intorno al lago", "raccontami un giro", "sono in zona"):
+        assert module._climb(module.normalise(sentence)) is None
+
+
+def test_a_bit_of_climb_is_neither_flat_nor_mountainous():
+    from backend import intent as module
+
+    mild = module._climb(module.normalise("un giro con un po' di dislivello"))
+    assert module.FLAT_TARGET_M < mild < module.HILLY_TARGET_M
+
+
+# --- how big is "a short ride" ---------------------------------------------
+# Calibrated from a rider's figures: the same word means a different outing by
+# sport and by training, and 30 km is a short ride where 5 km is a short run.
+
+@pytest.mark.parametrize("sentence,sport,km,gain", [
+    ("un giro corto in bici", "cycling", 30.0, 400.0),
+    ("un giro medio in bici", "cycling", 60.0, 600.0),
+    ("un giro lungo in bici", "cycling", 100.0, 1000.0),
+    ("una corsa corta", "running", 5.0, 100.0),
+    ("una corsa media", "running", 15.0, 225.0),
+    ("una corsa lunga", "running", 20.0, 600.0),
+])
+def test_size_words_fill_in_both_numbers(sentence, sport, km, gain):
+    parsed = read(sentence)
+    assert parsed.sport == sport
+    assert parsed.distance_km == km
+    assert parsed.elevation_gain_m == gain
+
+
+@pytest.mark.parametrize("sentence,km", [
+    ("un giro corto in bici, sono ben allenato", 70.0),
+    ("una corsa lunga, sono allenato", 40.0),
+    ("a short ride, i am well trained", 70.0),
+])
+def test_saying_you_are_trained_moves_every_number(sentence, km):
+    assert read(sentence).distance_km == km
+
+
+def test_saying_you_are_not_trained_does_not_read_as_trained():
+    """"non sono allenato" contains "allenato"."""
+    assert read("un giro corto in bici, non sono allenato").distance_km == 30.0
+    assert read("un giro corto in bici, sono principiante").distance_km == 30.0
+
+
+def test_a_number_they_gave_beats_the_table():
+    parsed = read("un giro lungo in bici di 40 km")
+    assert parsed.distance_km == 40.0
+    assert parsed.elevation_gain_m == 1000.0      # still long, still hilly
+
+
+def test_an_explicit_wish_about_hills_beats_the_table():
+    parsed = read("un giro lungo in bici ma senza salite")
+    assert parsed.distance_km == 100.0
+    assert parsed.elevation_gain_m == CLIMB_TARGETS["cycling"]["flat"]
+
+
+@pytest.mark.parametrize("sentence", [
+    "un giro in bici lungo il fiume",
+    "una corsa lungo l'Adige",
+    "a run along the canal",
+])
+def test_along_the_river_is_not_a_long_ride(sentence):
+    """"lungo" is both "long" and "along"; the article separates them."""
+    assert read(sentence).distance_km is None
+
+
+def test_a_trained_persons_medium_is_an_untrained_persons_long():
+    """Falls out of the calibration, and is worth holding on to."""
+    for sport in ("running", "cycling"):
+        trained_medium = RIDE_SIZES[sport]["trained"]["medium"][0]
+        normal_large = RIDE_SIZES[sport]["normal"]["large"][0]
+        assert trained_medium >= normal_large * 0.9
+
+
+def test_a_medium_rides_climb_is_not_described_as_a_lot():
+    """600 m is what the calibration calls a medium ride; the chip has to
+    agree with the table it came from."""
+    km, low, high = RIDE_SIZES["cycling"]["normal"]["medium"]
+    parsed = Intent(sport="cycling", elevation_gain_m=(low + high) / 2.0)
+    assert "un po' di dislivello" in summarise(parsed, "it")
+
+
+def test_asking_for_lots_of_climb_is_described_as_a_lot():
+    for sport in ("running", "cycling"):
+        parsed = Intent(sport=sport, elevation_gain_m=CLIMB_TARGETS[sport]["hilly"])
+        assert "molto dislivello" in summarise(parsed, "it")
