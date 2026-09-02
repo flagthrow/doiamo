@@ -161,3 +161,76 @@ def test_the_default_path_does_not_depend_on_the_working_directory(tmp_path, mon
     monkeypatch.chdir(tmp_path)
     assert os.path.isabs(poi_store.DEFAULT_PATH)
     assert poi_store.DEFAULT_PATH.endswith(os.path.join("data", "pois.sqlite"))
+
+
+# --- fetching the database on a fresh deployment ---------------------------
+
+def test_download_is_skipped_when_the_file_is_already_there(tmp_path):
+    from backend.poi_store import ensure_downloaded
+
+    existing = tmp_path / "pois.sqlite"
+    existing.write_bytes(b"x" * 4096)
+    assert ensure_downloaded(str(existing), url="http://unused.invalid") is True
+    assert existing.read_bytes() == b"x" * 4096          # untouched
+
+
+def test_no_url_means_no_download(tmp_path):
+    from backend.poi_store import ensure_downloaded
+
+    assert ensure_downloaded(str(tmp_path / "pois.sqlite"), url="") is False
+
+
+def test_a_failed_download_leaves_nothing_behind(tmp_path):
+    """A half-written file would be opened by SQLite and reported as empty —
+    coverage would claim nothing and every route would fall back anyway, but
+    silently and for the wrong reason."""
+    from backend.poi_store import ensure_downloaded
+
+    target = tmp_path / "pois.sqlite"
+    assert ensure_downloaded(str(target), url="http://127.0.0.1:9/nope") is False
+    assert not target.exists()
+    assert list(tmp_path.glob("*.part")) == []
+
+
+def test_a_truncated_download_is_rejected(tmp_path, monkeypatch):
+    import backend.poi_store as store
+
+    class FakeResponse:
+        def read(self, *a):
+            return b""
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda *a, **k: FakeResponse()
+    )
+    target = tmp_path / "pois.sqlite"
+    assert store.ensure_downloaded(str(target), url="http://example.invalid/db") is False
+    assert not target.exists()
+
+
+def test_a_real_download_lands_at_the_target(tmp_path):
+    """Served over a real socket, so the whole path is exercised."""
+    import http.server
+    import threading
+
+    from backend.poi_store import ensure_downloaded
+
+    payload = b"SQLite format 3\x00" + b"y" * 5000
+    source = tmp_path / "served.sqlite"
+    source.write_bytes(payload)
+
+    handler = http.server.SimpleHTTPRequestHandler
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+    import os
+    os.chdir(tmp_path)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        target = tmp_path / "fetched.sqlite"
+        url = "http://127.0.0.1:{}/served.sqlite".format(server.server_port)
+        assert ensure_downloaded(str(target), url=url) is True
+        assert target.read_bytes() == payload
+    finally:
+        server.shutdown()

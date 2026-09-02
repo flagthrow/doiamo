@@ -434,26 +434,35 @@ Set these as environment variables on the platform — `.env` is local only:
 |---|---|
 | `ORS_API_KEY` | routing. Without it `/api/search` answers a clear 503 |
 | `CANDIDATE_SEEDS` | `6` halves the ORS cost of a loop search |
-| `POI_DB` | path to the POI database, if it is not at `data/pois.sqlite` |
+| `POI_DB_URL` | **required in a deployment** — where to fetch the POI database |
+| `POI_DB` | path to the database, if not the default |
+| `ORS_DAILY_BUDGET` | ceiling on routing calls per day, default 1800 |
 
 The app runs without either: no key gives a readable error, and no database
 falls back to Overpass. It just runs slower.
 
 ### Getting the POI database into the container
 
-`data/` is gitignored — 19 MB of derived data is not source, and the 576 MB
-extract certainly is not. Do **not** build it during deployment: that needs the
-extract, pyosmium with a build toolchain, and about thirteen minutes.
+**Set `POI_DB_URL`.** Without it a deployment starts with no database, falls
+back to Overpass, and the points of interest simply do not appear — Overpass
+failed roughly one call in three when measured.
 
-Build it locally and get the SQLite file in one of these ways:
+```
+POI_DB_URL=https://github.com/flagthrow/doiamo/releases/download/poi-data-2026-09-02/pois.sqlite
+```
 
-- publish it as a release asset and `curl` it during the image build (cleanest);
-- commit it, accepting 19 MB in the repository;
-- upload it once to a persistent volume and point `POI_DB` at the mount.
+The file is fetched once at startup if it is not already on disk — about four
+seconds for 18 MB. It downloads to a temporary name and renames on success, so
+an interrupted download never leaves a half-written database that SQLite would
+open and quietly report as empty.
 
-Note that the POI database is **derived from OpenStreetMap and therefore
-ODbL**, not MIT like the code. If you distribute the file, say so and attribute
-OpenStreetMap.
+`data/` is gitignored: 18 MB of derived data is not source, and the 576 MB
+extract certainly is not. Do **not** build it during deployment — that needs the
+extract, pyosmium with a build toolchain, and about thirteen minutes. Build it
+locally, publish it, and point `POI_DB_URL` at it.
+
+The database is **derived from OpenStreetMap and therefore ODbL**, not MIT like
+the code. The release that hosts it says so and attributes OpenStreetMap.
 
 ## Licence and non-commercial use
 

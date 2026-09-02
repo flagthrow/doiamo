@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import candidates, config, geo, health, poi
 from .geocoding import PhotonGeocoder
-from .poi_store import LocalPoiStore
+from .poi_store import LocalPoiStore, ensure_downloaded
 from .cache import TTLCache
 from .gpx import build_gpx, filename_for
 from .models import (
@@ -73,7 +73,15 @@ def _search_key(query: SearchRequest) -> str:
 async def lifespan(app: FastAPI):
     app.state.engine = ORSEngine()
     app.state.geocoder = PhotonGeocoder()
+    # A deployment starts with no database unless POI_DB_URL is set; without
+    # one everything falls back to Overpass and looks broken.
+    ensure_downloaded()
     app.state.poi_store = LocalPoiStore()
+    log.info(
+        "POI store: %s (%s rows)",
+        "local" if app.state.poi_store.available else "overpass fallback",
+        app.state.poi_store.count,
+    )
     app.state.http = httpx.AsyncClient(timeout=15.0)
     try:
         yield

@@ -20,6 +20,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_PATH = os.environ.get("POI_DB") or os.path.join(_ROOT, "data", "pois.sqlite")
 
+# The database is built from a 576 MB extract and is far too large to commit,
+# so a deployment starts without one and silently falls back to Overpass. Point
+# POI_DB_URL at a copy and it is fetched once on startup instead.
+DOWNLOAD_URL = os.environ.get("POI_DB_URL", "")
+DOWNLOAD_TIMEOUT_S = float(os.environ.get("POI_DB_TIMEOUT_S", "120"))
+
 # Coverage is a grid of cells that actually hold data, not a bounding box. A
 # box cannot describe a region: the north-west extract's box spans Bologna,
 # Verona and Parma, none of which are in it, and claiming them would return no
@@ -124,3 +130,45 @@ class LocalPoiStore:
             {"id": row[0], "kind": row[1], "name": row[2], "lat": row[3], "lon": row[4]}
             for row in rows
         ]
+
+
+def ensure_downloaded(
+    path: str = DEFAULT_PATH,
+    url: str = "",
+    timeout_s: float = DOWNLOAD_TIMEOUT_S,
+) -> bool:
+    """Fetch the POI database if it is missing and a URL was configured.
+
+    Returns True when a usable file is in place. Failure is not fatal: the app
+    falls back to Overpass, which is slower but works.
+
+    Downloads to a temporary name and renames on success, so an interrupted
+    download never leaves a half-written database that SQLite would then open
+    and quietly report as empty.
+    """
+    if os.path.exists(path):
+        return True
+    url = url or DOWNLOAD_URL
+    if not url:
+        return False
+
+    import shutil
+    import tempfile
+    import urllib.request
+
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    handle, staging = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".part")
+    os.close(handle)
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "Doiamo/0.1"})
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            with open(staging, "wb") as out:
+                shutil.copyfileobj(response, out)
+        if os.path.getsize(staging) < 1024:
+            raise OSError("downloaded file is too small to be a database")
+        os.replace(staging, path)
+        return True
+    except Exception:
+        if os.path.exists(staging):
+            os.remove(staging)
+        return False
