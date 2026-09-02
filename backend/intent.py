@@ -19,7 +19,7 @@ import io
 import os
 import re
 import unicodedata
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -142,9 +142,9 @@ def normalise(text: str) -> str:
 # group, where the more specific phrase has to be tested first.
 SPORT_WORDS = {
     "cycling": ["bici", "bicicletta", "pedalare", "pedalando", "pedalo",
-                "ciclismo", "in sella", "bike", "cycling", "cycle", "ride",
+                "ciclismo", "in sella", "pedalatina", "bike", "cycling", "cycle", "ride",
                 "riding"],
-    "running": ["correre", "correndo", "corsa", "corro", "corri", "corriamo",
+    "running": ["corsetta", "correre", "correndo", "corsa", "corro", "corri", "corriamo",
                 "running", "run", "jog", "jogging", "podismo", "camminare",
                 "camminata", "walk", "walking"],
 }
@@ -320,9 +320,19 @@ def _places(text: str) -> Dict[str, Optional[str]]:
 
 def read(sentence: str) -> Intent:
     """The rule reader. No network, no key, no cost."""
+    return read_detailed(sentence)[0]
+
+
+def read_detailed(sentence: str) -> Tuple[Intent, bool]:
+    """The parsed sentence, and whether its distance came from the size table
+    rather than from the sentence itself.
+
+    The difference decides whether the model is worth asking, so it cannot be
+    thrown away: see is_thin.
+    """
     text = normalise(sentence)
     if not text:
-        return Intent()
+        return Intent(), False
 
     places = _places(text)
 
@@ -344,11 +354,13 @@ def read(sentence: str) -> Intent:
     # does an explicit "senza salite" — the size word is the weakest signal in
     # the sentence, not the strongest.
     size = _size(rest)
+    guessed_distance = False
     if size and (distance is None or elevation is None):
         by_sport = RIDE_SIZES.get(sport or "running", RIDE_SIZES["running"])
         km, low, high = by_sport[_fitness(rest)][size]
         if distance is None:
             distance = km
+            guessed_distance = True
         if elevation is None:
             elevation = round((low + high) / 2.0)
 
@@ -367,7 +379,7 @@ def read(sentence: str) -> Intent:
         sights=sights,
         start_text=places["start_text"],
         end_text=places["end_text"],
-    )
+    ), guessed_distance
 
 
 def summarise(intent: Intent, language: str = "it") -> List[str]:
@@ -520,12 +532,18 @@ def _client():
     return client
 
 
-def is_thin(intent: Intent) -> bool:
+def is_thin(intent: Intent, guessed_distance: bool = False) -> bool:
     """True when the rules found too little to act on.
 
     A distance or a place is enough to build a search from; without either,
     the sentence is worth spending a model call on.
     """
+    # A size word fills a distance in from the calibration table, which is our
+    # default rather than something they said. Counting it as knowledge is what
+    # stopped "una corsetta intorno a L'Aquila" from ever reaching the model —
+    # and the place went with it, so the route came back around Milan.
+    if guessed_distance and not intent.start_text:
+        return True
     return intent.distance_km is None and not intent.start_text
 
 
@@ -627,8 +645,8 @@ def interpret(sentence: str, client=None, allow_model: bool = True) -> Intent:
         return answer
     CACHE_STATS["misses"] += 1
 
-    intent = read(sentence)
-    if not allow_model or not is_thin(intent):
+    intent, guessed_distance = read_detailed(sentence)
+    if not allow_model or not is_thin(intent, guessed_distance):
         _CACHE.set(key, intent)
         STORE.put(key, sentence, intent.model_dump(), rules_failed=False)
         return intent

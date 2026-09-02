@@ -3,6 +3,9 @@ const state = {
   mode: "route",   // both endpoints by default; the checkbox makes it a loop
   sport: stored("doiamo_sport", "running", ["running", "cycling"]),
   sportChosen: false,   // true once the person corrected the guess themselves
+  // undefined = never asked; null = asked and refused. The difference is
+  // what stops a refusal from re-prompting on every search.
+  here: undefined,
   assumedSport: false,
   surface: "asphalt",
   sights: "both",
@@ -1202,14 +1205,17 @@ async function askSearch() {
   message("");
   try {
     const centre = (state.view === "home" && heroMap ? heroMap : map).getCenter();
+    // Only what we already have: asking for a fix here would put a permission
+    // prompt in front of every search, including the ones that name a city.
+    const bias = state.here || { lat: centre.lat, lon: centre.lng };
     const response = await fetch("/api/interpret", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sentence: sentence,
         lang: getLang(),
-        lat: centre.lat,
-        lon: centre.lng,
+        lat: bias.lat,
+        lon: bias.lon,
       }),
     });
     if (!response.ok) {
@@ -1232,12 +1238,19 @@ async function askSearch() {
       });
     }
 
-    // A sentence that names no place still means "from here". Fall back to
-    // what the map is showing and say so, rather than refusing to search.
+    // A sentence that names no place means "from here" — so find out where
+    // here is. If the browser will not say, fall back to the map centre and
+    // label it as the map centre, rather than claiming it is you.
     if (!state.start) {
-      const centre = (heroMap || map).getCenter();
-      setPoint("start", centre.lat, centre.lng, t("fromHere"), false);
-      addChip(t("fromHere"));
+      const spot = await here(7000);
+      if (spot) {
+        setPoint("start", spot.lat, spot.lon, t("fromHere"), false);
+        addChip(t("fromHere"));
+      } else {
+        const centre = (heroMap || map).getCenter();
+        setPoint("start", centre.lat, centre.lng, t("fromMapCentre"), false);
+        addChip(t("fromMapCentre"));
+      }
     }
     await search();
   } catch (err) {
@@ -1352,6 +1365,27 @@ const GAP_MS = 420;
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 let askTyper = null;
+
+// The hero map opens on Milan. Taking that centre and calling it "da dove sei
+// ora" was a claim, and a false one for everyone who is not in Milan — so ask
+// the browser where you actually are, and say plainly when it would not tell.
+function currentPosition(timeoutMs) {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(null),          // denied, unavailable or timed out
+      { timeout: timeoutMs, maximumAge: 5 * 60 * 1000 }
+    );
+  });
+}
+
+// Asked for at most once a session, and only when a search actually needs it —
+// a permission prompt on page load is a toll gate on the front door.
+async function here(timeoutMs) {
+  if (state.here === undefined) state.here = await currentPosition(timeoutMs);
+  return state.here;
+}
 
 function stopAskTypewriter() {
   if (askTyper) {

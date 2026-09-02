@@ -13,6 +13,7 @@ from backend.intent import (
     Intent,
     interpret,
     is_thin,
+    read_detailed,
     normalise,
     read,
     summarise,
@@ -558,3 +559,31 @@ def test_asking_for_lots_of_climb_is_described_as_a_lot():
     for sport in ("running", "cycling"):
         parsed = Intent(sport=sport, elevation_gain_m=CLIMB_TARGETS[sport]["hilly"])
         assert "molto dislivello" in summarise(parsed, "it")
+
+
+def test_a_size_word_alone_still_leaves_the_sentence_thin():
+    """The size table supplies a distance we chose, not one they gave. Counting
+    it as knowledge stopped "una corsetta intorno a L'Aquila" reaching the
+    model, and the place went with it — the route came back around Milan."""
+    parsed, guessed = read_detailed("una corsetta intorno a l'aquila")
+    assert guessed is True
+    assert is_thin(parsed, guessed) is True
+
+
+def test_a_distance_they_actually_gave_is_not_thin():
+    parsed, guessed = read_detailed("correre 10 km in citta")
+    assert guessed is False
+    assert is_thin(parsed, guessed) is False
+
+
+def test_a_named_place_is_never_thin_whatever_the_distance():
+    parsed, guessed = read_detailed("un giro corto da Monza a Lecco")
+    assert is_thin(parsed, guessed) is False
+
+
+@pytest.mark.parametrize("sentence,sport", [
+    ("una corsetta qui vicino", "running"),
+    ("una pedalatina tranquilla", "cycling"),
+])
+def test_a_diminutive_names_the_activity_as_well_as_its_size(sentence, sport):
+    assert read(sentence).sport == sport
