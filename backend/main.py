@@ -322,7 +322,7 @@ async def interpret(request: InterpretRequest) -> InterpretResponse:
         if not text:
             continue
         try:
-            hits = await app.state.geocoder.search(text, near=near)
+            hits = await app.state.geocoder.search(text, near=near, prefer_place=True)
         except Exception:
             hits = []
         if hits:

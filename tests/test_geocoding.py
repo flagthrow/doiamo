@@ -2,6 +2,7 @@
 import httpx
 import pytest
 
+from backend import geocoding
 from backend.geocoding import PhotonGeocoder, _label
 
 
@@ -145,3 +146,25 @@ async def test_features_without_coordinates_are_skipped():
     async with transport(lambda r: httpx.Response(200, json=payload)) as client:
         rows = await PhotonGeocoder(client=client).search("xy")
     assert [r["label"] for r in rows] == ["Good, Milano"]
+
+
+# --- naming a place vs. typing near one ------------------------------------
+
+def test_settlement_outranks_a_nearby_business_of_the_same_name():
+    """Searching "L'Aquila" from Milan must reach Abruzzo, not a restaurant
+    called L'Aquila d'Oro two kilometres away."""
+    city = {"name": "L'Aquila", "osm_key": "place", "osm_value": "city"}
+    hotel = {"name": "L'Aquila d'Oro", "osm_key": "amenity", "osm_value": "restaurant"}
+
+    assert geocoding._tier(city, "l'aquila") > geocoding._tier(hotel, "l'aquila")
+
+
+def test_tier_folds_case_accents_and_curly_apostrophes():
+    feature = {"name": "L’Aquila", "osm_key": "place", "osm_value": "city"}
+    assert geocoding._tier(feature, "l'aquila") == 3
+
+
+def test_an_exact_match_beats_a_prefix_match():
+    exact = {"name": "Monza", "osm_key": "place", "osm_value": "city"}
+    prefix = {"name": "Monza e della Brianza", "osm_key": "place", "osm_value": "county"}
+    assert geocoding._tier(exact, "monza") > geocoding._tier(prefix, "monza")
