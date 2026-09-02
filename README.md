@@ -400,6 +400,26 @@ Rome and Milan OSM extracts fit comfortably on a small VPS, and self-hosting als
 removes the per-request throttle, which is what currently caps how many
 candidates a search can afford to consider.
 
+## Running it locally
+
+```bash
+./run.sh                      # http://localhost:8000
+```
+
+Then check it has what it needs:
+
+```bash
+curl -s localhost:8000/api/healthz
+```
+
+- `routing_configured: true` — `ORS_API_KEY` is set
+- `poi_source: "local"` with a `poi_local_count` — the POI database was found.
+  `"overpass"` with a count of 0 means it was not, and everything will be slow
+- `routing_budget.remaining` — calls left today
+
+The POI database path resolves against the project root, not the working
+directory, so it is found however the server is started.
+
 ## Deploying
 
 `railpack.json` sets the start command, because the app object is at

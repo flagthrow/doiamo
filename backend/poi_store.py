@@ -14,7 +14,11 @@ import os
 import sqlite3
 from typing import Dict, List, Optional, Sequence, Tuple
 
-DEFAULT_PATH = os.environ.get("POI_DB", "data/pois.sqlite")
+# Resolved against the project root, not the working directory. A relative
+# path here fails silently — the store reports "not available" and everything
+# falls back to Overpass, which looks exactly like having no database at all.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_PATH = os.environ.get("POI_DB") or os.path.join(_ROOT, "data", "pois.sqlite")
 
 # Coverage is a grid of cells that actually hold data, not a bounding box. A
 # box cannot describe a region: the north-west extract's box spans Bologna,

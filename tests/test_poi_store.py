@@ -148,3 +148,16 @@ def test_a_route_spanning_the_gap_is_not_claimed(two_regions):
 def test_each_region_keeps_its_own_data(two_regions):
     assert two_regions.near([(45.47, 9.19)], 500)[0]["id"] == "node/1"
     assert two_regions.near([(41.90, 12.49)], 500)[0]["id"] == "node/2"
+
+
+def test_the_default_path_does_not_depend_on_the_working_directory(tmp_path, monkeypatch):
+    """A relative default fails silently: the store reports unavailable and
+    everything falls back to Overpass, which looks identical to having no
+    database at all."""
+    import os
+
+    from backend import poi_store
+
+    monkeypatch.chdir(tmp_path)
+    assert os.path.isabs(poi_store.DEFAULT_PATH)
+    assert poi_store.DEFAULT_PATH.endswith(os.path.join("data", "pois.sqlite"))
