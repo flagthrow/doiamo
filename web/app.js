@@ -1157,7 +1157,7 @@ function addChip(text, missing) {
   box.appendChild(chip);
 }
 
-function addGuessChip(text, onFlip) {
+function addGuessChip(text, onFlip, hint) {
   const box = document.getElementById("askChips");
   box.hidden = false;
   const chip = document.createElement("button");
@@ -1168,7 +1168,7 @@ function addGuessChip(text, onFlip) {
   chip.append(text);
   const why = document.createElement("span");
   why.className = "why";
-  why.textContent = t("assumed");
+  why.textContent = hint || t("assumed");
   chip.appendChild(why);
   chip.addEventListener("click", onFlip);
   box.appendChild(chip);
@@ -1243,13 +1243,18 @@ async function askSearch() {
     // label it as the map centre, rather than claiming it is you.
     if (!state.start) {
       const spot = await here(7000);
-      if (spot) {
+      if (spot && spot.accuracy <= FIX_VAGUE_M) {
         setPoint("start", spot.lat, spot.lon, t("fromHere"), false);
         addChip(t("fromHere"));
+      } else if (spot) {
+        // Good enough to search from, not good enough to assert. Dashed and
+        // tappable, like every other thing we guessed.
+        setPoint("start", spot.lat, spot.lon, t("fromHere"), false);
+        addGuessChip(t("fromHere"), () => openPicker("start"), t("approxPosition"));
       } else {
         const centre = (heroMap || map).getCenter();
         setPoint("start", centre.lat, centre.lng, t("fromMapCentre"), false);
-        addChip(t("fromMapCentre"));
+        addGuessChip(t("fromMapCentre"), () => openPicker("start"), t("tapToSetIt"));
       }
     }
     await search();
@@ -1369,11 +1374,31 @@ let askTyper = null;
 // The hero map opens on Milan. Taking that centre and calling it "da dove sei
 // ora" was a claim, and a false one for everyone who is not in Milan — so ask
 // the browser where you actually are, and say plainly when it would not tell.
+// A browser with no GPS and no known Wi-Fi around it falls back to locating
+// you by IP address, and reports that as a position like any other — which is
+// how someone in Italy is told they are in Germany. The giveaway is always
+// coords.accuracy: a GPS or Wi-Fi fix lands within tens of metres, an IP fix
+// is a radius of tens of kilometres. A fix that cannot tell which country you
+// are in cannot start a run, so it is not a fix.
+const FIX_USELESS_M = 25000;   // beyond this it is an IP guess, not a position
+const FIX_VAGUE_M = 1500;      // usable, but say it is approximate
+
 function currentPosition(timeoutMs) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      (pos) => {
+        // Firefox has been known to omit accuracy; treat unknown as usable
+        // rather than throwing away a fix that may well be fine.
+        const accuracy = Number.isFinite(pos.coords.accuracy)
+          ? pos.coords.accuracy : 0;
+        if (accuracy > FIX_USELESS_M) return resolve(null);
+        resolve({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: accuracy,
+        });
+      },
       () => resolve(null),          // denied, unavailable or timed out
       { timeout: timeoutMs, maximumAge: 5 * 60 * 1000 }
     );
