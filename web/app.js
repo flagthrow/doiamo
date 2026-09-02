@@ -1117,7 +1117,8 @@ async function search() {
       const detail = (await response.json().catch(() => ({}))).detail || "";
       const reason = String(detail).toLowerCase();
       if (response.status === 503) message(t("keyMissing"), "warn", true);
-      else if (reason.includes("quota")) message(t("quotaSpent"), "warn", true);
+      else if (reason.includes("quota") || reason.includes("budget"))
+        message(t("quotaSpent"), "warn", true);
       else if (reason.includes("rate limit")) message(t("rateLimited"), "warn", true);
       else message(t("error") + (detail ? ": " + detail : ""), "warn", true);
       return;

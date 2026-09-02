@@ -11,4 +11,10 @@ if [ ! -d .venv ]; then
   ./.venv/bin/pip install -q -r requirements.txt
 fi
 
-exec ./.venv/bin/uvicorn backend.main:app --reload --port "${PORT:-8000}"
+# --reload restarts on every file save, which clears the in-memory route and
+# search caches — so the same search costs its full quota again. Opt in with
+# DEV_RELOAD=1 when you are actually editing.
+RELOAD=""
+[ -n "${DEV_RELOAD:-}" ] && RELOAD="--reload"
+
+exec ./.venv/bin/uvicorn backend.main:app $RELOAD --port "${PORT:-8000}"

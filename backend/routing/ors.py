@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import httpx
 
 from .. import config, geo
+from ..spend import DailyBudget
 from .base import RawRoute, RoutingEngine, RoutingError
 
 
@@ -75,6 +76,18 @@ class ORSEngine(RoutingEngine):
         self._owns_client = client is None
         self._semaphore = asyncio.Semaphore(config.ORS_MAX_CONCURRENCY)
         self._throttle = _Throttle(config.ORS_MIN_INTERVAL_S)
+        self.budget = DailyBudget(config.ORS_DAILY_BUDGET, config.ORS_BUDGET_FILE)
+
+    def _reserve(self, calls: int) -> None:
+        """Refuse before spending rather than discovering it upstream."""
+        if not self.budget.limit:
+            return
+        if not self.budget.take(calls):
+            raise RoutingError(
+                "daily routing budget spent ({} of {} calls today)".format(
+                    self.budget.status()["used"], self.budget.limit
+                )
+            )
 
     @property
     def configured(self) -> bool:
@@ -108,6 +121,7 @@ class ORSEngine(RoutingEngine):
             raise RoutingError("ORS_API_KEY is not set")
 
         profile = self._profile(sport, surface)
+        self._reserve(len(seeds))
         tasks = [
             self._one_round_trip(profile, lat, lon, length_m, seed, points)
             for seed, points in seeds
@@ -254,6 +268,7 @@ class ORSEngine(RoutingEngine):
             and length_m > straight_m * config.DETOUR_MIN_RATIO
         )
         if wants_detour:
+            self._reserve(config.DETOUR_VIA_COUNT)
             routes, notices = await self._detour_routes(
                 profile, start, end, length_m, straight_m
             )
@@ -266,6 +281,7 @@ class ORSEngine(RoutingEngine):
             return direct, notices + more
 
         notices = [] if length_m is None else ["distance_below_direct"]
+        self._reserve(1)
         routes, more = await self._alternative_routes(profile, start, end)
         return routes, notices + more
 

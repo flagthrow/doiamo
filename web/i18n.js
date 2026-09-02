@@ -98,7 +98,7 @@ const STRINGS = {
     keyMissing:
       "Manca la chiave OpenRouteService. Imposta ORS_API_KEY e riavvia il server.",
     rateLimited: "Troppe richieste verso il servizio di routing. Riprova fra un minuto.",
-    quotaSpent: "Quota giornaliera di OpenRouteService esaurita. Si azzera domani. Un giro ad anello costa 12 chiamate, un percorso A→B una sola.",
+    quotaSpent: "Quota giornaliera di routing esaurita. Si azzera domani. Un giro ad anello costa alcune chiamate, un percorso A→B una sola.",
 
     poiTitle: "Punti utili",
     poiLoading: "Cerco i punti utili…",
@@ -215,7 +215,7 @@ const STRINGS = {
     error: "Something went wrong",
     keyMissing: "OpenRouteService key missing. Set ORS_API_KEY and restart the server.",
     rateLimited: "Too many requests to the routing service. Try again in a minute.",
-    quotaSpent: "OpenRouteService daily quota is used up. It resets tomorrow. A loop costs 12 calls; an A-to-B route costs one.",
+    quotaSpent: "The daily routing budget is spent. It resets tomorrow. A loop costs several calls; an A-to-B route costs one.",
 
     poiTitle: "Useful points",
     poiLoading: "Looking for useful points…",

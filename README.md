@@ -49,7 +49,7 @@ The only credential needed is an [OpenRouteService](https://openrouteservice.org
 key (free). Weather and air quality come from Open-Meteo, which needs no key.
 
 ```bash
-./.venv/bin/python -m pytest -q     # 135 tests, no network needed
+./.venv/bin/python -m pytest -q     # 173 tests, no network needed
 ```
 
 ## Working without an API key
@@ -372,6 +372,22 @@ the same piazza do not pay twice. Sport and surface *are* in the key, because
 both pick the routing profile.
 
 A nice side effect: a spent quota stops new searches, not ones already made.
+
+### A ceiling you set, not one you discover
+
+`ORS_DAILY_BUDGET` (default 1800, under the free tier's 2000) caps routing
+calls per UTC day. A search reserves its whole cost up front and is refused
+before any call is made, so the budget cannot be overshot by a search already
+in flight. The count is persisted — a process restart must not hand out an
+allowance the upstream service does not agree exists — and `/api/healthz`
+reports what is left.
+
+Set it to `0` to disable the guard.
+
+Note also that `run.sh` no longer passes `--reload` unless `DEV_RELOAD=1`.
+Reload restarts on every file save, which clears the in-memory route and search
+caches, so the same search pays full price again. That, rather than the app
+itself, is where a day's allowance tends to go during development.
 
 When it runs out ORS answers `403 Quota exceeded` — the same status it uses for
 a bad key, so the two are told apart explicitly rather than sending you off to

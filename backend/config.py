@@ -12,6 +12,12 @@ ORS_MAX_CONCURRENCY = int(os.environ.get("ORS_MAX_CONCURRENCY", "4"))
 ORS_MIN_INTERVAL_S = float(os.environ.get("ORS_MIN_INTERVAL_S", "1.6"))
 ORS_TIMEOUT_S = float(os.environ.get("ORS_TIMEOUT_S", "25"))
 
+# A hard ceiling on routing calls per UTC day, below the free tier's 2000 so
+# there is headroom. A loop search spends CANDIDATE_SEEDS of these, so an
+# afternoon of testing can empty the day without one. 0 disables the guard.
+ORS_DAILY_BUDGET = int(os.environ.get("ORS_DAILY_BUDGET", "1800"))
+ORS_BUDGET_FILE = os.environ.get("ORS_BUDGET_FILE", "data/ors_budget.json")
+
 # How many loop candidates we ask the router for per search.
 CANDIDATE_SEEDS = int(os.environ.get("CANDIDATE_SEEDS", "12"))
 MAX_RESULTS = int(os.environ.get("MAX_RESULTS", "5"))

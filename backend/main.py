@@ -106,6 +106,8 @@ async def healthz() -> Dict[str, object]:
         "routing_configured": app.state.engine.configured,
         "poi_source": "local" if store.available else "overpass",
         "poi_local_count": store.count,
+        "routing_budget": app.state.engine.budget.status()
+        if hasattr(app.state.engine, "budget") else None,
     }
 
 
