@@ -4,6 +4,16 @@ const STRINGS = {
   it: {
     headline: "Dove vuoi andare oggi?",
     askPlaceholder: "Scrivilo come lo diresti: \u201cvoglio correre 10 km senza troppo dislivello, restando in citt\u00e0\u201d",
+    // Typed out one after another in the empty box. Each one shows a different
+    // thing the parser can do, so the examples double as the feature list.
+    askExamples: [
+      "voglio correre 10 km senza troppo dislivello, restando in citt\u00e0",
+      "un giro in bici di un\u2019ora lungo il fiume, lontano dalle macchine",
+      "una corsetta intorno a L\u2019Aquila con un po\u2019 di dislivello",
+      "da Navigli al Parco Sempione, il pi\u00f9 tranquillo possibile",
+      "20 km di sterrato in bici, con qualche fontanella lungo la strada",
+      "mezz\u2019ora di corsa qui vicino, dove si respira meglio",
+    ],
     askGo: "Cerca",
     tryClassic: "Prova la ricerca classica",
     hideClassic: "Torna alla ricerca a parole",
@@ -139,6 +149,14 @@ const STRINGS = {
   en: {
     headline: "Where do you want to go today?",
     askPlaceholder: "Say it however you like: \u201cI want to run 10 km without much climbing, staying in the city\u201d",
+    askExamples: [
+      "I want to run 10 km without much climbing, staying in the city",
+      "an hour on the bike along the river, away from traffic",
+      "a run around L\u2019Aquila with a bit of climbing",
+      "from Navigli to Parco Sempione, as quiet as you can make it",
+      "20 km of gravel on the bike, with water along the way",
+      "half an hour of running near here, where the air is better",
+    ],
     askGo: "Search",
     tryClassic: "Try the classic search",
     hideClassic: "Back to searching in words",

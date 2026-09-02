@@ -568,6 +568,7 @@ function showHome() {
   }
   document.getElementById("home").scrollTop = 0;
   updateMapHint();
+  startAskTypewriter();
 }
 
 function showApp() {
@@ -578,6 +579,7 @@ function showApp() {
   document.getElementById("newSearch").hidden = false;
   renderSummary();
   updateMapHint();
+  stopAskTypewriter();
 }
 
 // The map is opened deliberately rather than shown alongside: on a phone it
@@ -1338,6 +1340,95 @@ async function search() {
   }
 }
 
+// ------------------------------------------------------- the typing prompt
+// A static example tells you the box takes a sentence. One being typed tells
+// you it takes YOUR sentence — and cycling through them is the feature list,
+// since every example demonstrates something different the parser reads.
+const TYPE_MS = 42;      // fast enough not to test anyone's patience
+const DELETE_MS = 20;    // nobody needs to watch it un-type at reading speed
+const HOLD_MS = 2100;    // long enough to finish reading the finished line
+const GAP_MS = 420;
+
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+let askTyper = null;
+
+function stopAskTypewriter() {
+  if (askTyper) {
+    clearTimeout(askTyper.timer);
+    askTyper = null;
+  }
+}
+
+function startAskTypewriter() {
+  stopAskTypewriter();
+  const field = document.getElementById("ask");
+  if (!field) return;
+
+  // Someone who has started writing does not need to be shown how, and text
+  // moving underneath a caret is just noise.
+  if (field.value) {
+    field.placeholder = "";
+    return;
+  }
+  // Off the home page, or in a background tab, there is nothing to watch — so
+  // there is nothing to run. visibilitychange only fires on a change, so a tab
+  // that was already hidden when the page loaded has to be caught here.
+  if (state.view !== "home" || document.hidden) return;
+
+  const examples = t("askExamples");
+  if (!Array.isArray(examples) || !examples.length) {
+    field.placeholder = t("askPlaceholder");
+    return;
+  }
+  // Asked not to animate: keep the sentence that explains the box, which says
+  // more than any single example.
+  if (REDUCED_MOTION.matches) {
+    field.placeholder = t("askPlaceholder");
+    return;
+  }
+
+  // Start somewhere different each visit, so a returning user sees a new one.
+  const self = {
+    at: Math.floor(Math.random() * examples.length),
+    shown: 0,
+    phase: "type",
+    timer: 0,
+  };
+  askTyper = self;
+
+  function step() {
+    if (askTyper !== self) return;          // superseded; let this chain die
+    const line = examples[self.at % examples.length];
+    let delay = TYPE_MS;
+
+    if (self.phase === "type") {
+      self.shown += 1;
+      if (self.shown >= line.length) {
+        self.phase = "hold";
+        delay = HOLD_MS;
+      }
+    } else if (self.phase === "hold") {
+      self.phase = "delete";
+      delay = DELETE_MS;
+    } else {
+      self.shown -= 1;
+      delay = DELETE_MS;
+      if (self.shown <= 0) {
+        self.phase = "type";
+        self.at += 1;
+        delay = GAP_MS;
+      }
+    }
+
+    field.placeholder =
+      line.slice(0, self.shown) + (self.phase === "hold" ? "" : "\u258c");
+    self.timer = setTimeout(step, delay);
+  }
+
+  step();
+}
+
 // ---------------------------------------------------------------- i18n
 function applyLang() {
   document.documentElement.lang = getLang();
@@ -1347,7 +1438,7 @@ function applyLang() {
   document.querySelectorAll("#lang button").forEach((b) => {
     b.setAttribute("aria-pressed", String(b.dataset.lang === getLang()));
   });
-  document.getElementById("ask").placeholder = t("askPlaceholder");
+  startAskTypewriter();
   document.getElementById("askGo").textContent = t("askGo");
   revealForm(!document.getElementById("heroSlot").hidden);
   document.getElementById("startInput").placeholder = t("startPlaceholder");
@@ -1429,6 +1520,19 @@ function wireEverything() {
       e.preventDefault();
       askSearch();
     }
+  });
+  // The demonstration is over the moment they start writing their own, and it
+  // comes back if they clear the box and leave it alone.
+  // startAskTypewriter stops whatever was running and decides from the field's
+  // own state whether anything should replace it.
+  document.getElementById("ask").addEventListener("input", startAskTypewriter);
+  REDUCED_MOTION.addEventListener("change", startAskTypewriter);
+  // A background tab throttles timers to about one a second, which turns the
+  // animation into a stutter and leaves it mid-word on return. Nothing is
+  // being watched anyway, so stop, and start the next line fresh when it is.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopAskTypewriter();
+    else startAskTypewriter();
   });
   document.getElementById("toggleForm").addEventListener("click", () => {
     revealForm(document.getElementById("heroSlot").hidden);
