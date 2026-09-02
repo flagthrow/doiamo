@@ -26,6 +26,8 @@ const state = {
   poiFailed: false,
   poiExpired: false,
   poiKinds: [],
+  monumentKinds: [],
+  natureKinds: [],
   poiOff: {},   // kinds the viewer switched off
   poiLoading: false,
   mapStyle: "clean",
@@ -819,6 +821,9 @@ async function loadPois() {
     state.pois = data.pois || [];
     state.poiCounts = data.counts || {};
     state.poiKinds = data.kinds || [];
+    // Served rather than duplicated here, so the two definitions cannot drift.
+    state.monumentKinds = data.monument_kinds || [];
+    state.natureKinds = data.nature_kinds || [];
     state.poiScores = data.scores || {};
     // An outage and an empty neighbourhood look identical unless we say so.
     state.poiFailed = data.available === false;
@@ -870,10 +875,15 @@ function scoreRing(value) {
   return wrap;
 }
 
-function bar(label, value) {
+// The bar shows how this route compares; the number beside it says what was
+// actually measured. A bare 0-100 reads as a percentage of something and is
+// not one — "cose belle 100" only ever meant "the best of these five", and
+// "acqua 100" meant "at least one tap every 3 km", which nearly everything in
+// a city clears. A count, a percentage or a height is arguable; a rank is not.
+function bar(label, value, fact, miss) {
   const pct = Math.round((value || 0) * 100);
   const row = document.createElement("div");
-  row.className = "bar";
+  row.className = "bar" + (miss ? " miss" : "");
   const name = document.createElement("span");
   name.textContent = label;
   const track = document.createElement("div");
@@ -884,7 +894,7 @@ function bar(label, value) {
   track.appendChild(fill);
   const num = document.createElement("span");
   num.className = "num";
-  num.textContent = pct;
+  num.textContent = fact === undefined || fact === null ? pct : fact;
   row.append(name, track, num);
   return row;
 }
@@ -985,42 +995,91 @@ function renderResults() {
 
     const bars = document.createElement("div");
     bars.className = "bars";
-    // The same number means different things depending on what was asked for:
-    // a match against your target, or a comparison against the siblings.
-    bars.appendChild(bar(
-      hasDistanceTarget ? t("scoreDistance") : t("scoreDirectness"),
-      route.scores.distance
-    ));
+    const query = lastPayload.query || {};
+
+    // Distance: against your target if you set one, otherwise how direct it is.
+    if (hasDistanceTarget) {
+      const offKm = route.distance_m / 1000 - query.distance_km;
+      bars.appendChild(bar(
+        t("scoreDistance"), route.scores.distance,
+        (offKm >= 0 ? "+" : "\u2212") + Math.abs(offKm).toFixed(1) + " km",
+        route.scores.distance <= 0.01
+      ));
+    } else {
+      bars.appendChild(bar(t("scoreDirectness"), route.scores.distance));
+    }
+
+    // Climb: the height itself, and marked when it is not what was asked for.
     if (hasGainTarget || !isLoop) {
       bars.appendChild(bar(
         hasGainTarget ? t("scoreGain") : t("scoreGainFlat"),
-        route.scores.gain
+        route.scores.gain,
+        "+" + Math.round(route.ascent_m) + " m",
+        hasGainTarget && route.scores.gain <= 0.01
       ));
     }
-    bars.appendChild(bar(t("scoreSurface"), route.scores.surface));
-    bars.appendChild(bar(t("scoreTraffic"), route.scores.traffic));
-    bars.appendChild(bar(t("scoreWind"), route.scores.wind));
+
+    // Surface: the share of the route that is actually what you asked for.
+    const paved = Math.round(route.paved_share * 100);
+    bars.appendChild(bar(
+      t("scoreSurface"), route.scores.surface,
+      query.surface === "trail" ? (100 - paved) + "% " + t("unpaved")
+                                : paved + "% " + t("paved")
+    ));
+
+    // Traffic: metres beside fast roads, which is the thing you can act on.
+    bars.appendChild(bar(
+      t("scoreTraffic"), route.scores.traffic,
+      Math.round((route.big_road_share || 0) * 100) + "% " + t("bigRoadsShort")
+    ));
+
+    // Wind is only ever a fact on a one-way route. Around a loop every metre
+    // into it is repaid by a metre with it, so the number said nothing about
+    // the route and the same thing about all of them.
+    if (!isLoop) {
+      bars.appendChild(bar(
+        t("scoreWind"), route.scores.wind,
+        Math.round(route.headwind_share * 100) + "% " + t("headwindShort")
+      ));
+    }
+
     if (
       route.scores.air !== null && route.scores.air !== undefined &&
       lastPayload.air.differentiates_routes
     ) {
-      bars.appendChild(bar(t("scoreAir"), route.scores.air));
+      const aqi = route.air && route.air.european_aqi;
+      bars.appendChild(bar(
+        t("scoreAir"), route.scores.air,
+        aqi === undefined || aqi === null ? undefined : "AQI " + Math.round(aqi)
+      ));
     }
+
     const extra = state.poiScores[route.id];
+    const counts = (state.poiCounts && state.poiCounts[route.id]) || {};
     if (extra) {
-      bars.appendChild(bar(t("scoreWater"), extra.water));
-      // Only the axis the viewer asked for is scored, so only it is shown —
-      // a bar for something that did not count would be a lie.
-      const wanted = (lastPayload.query || {}).sights;
+      // How far you go between taps, rather than a score that reads 100 for
+      // anything with one every three kilometres.
+      const taps = counts.water || 0;
+      const km = route.distance_m / 1000;
+      bars.appendChild(bar(
+        t("scoreWater"), extra.water,
+        taps ? t("everyKm").replace("{km}", (km / taps).toFixed(1)) : t("none")
+      ));
+      // Only the axis you asked for is scored, so only it is shown.
       if (extra.sights !== null && extra.sights !== undefined) {
-        const label = wanted === "monuments" ? t("scoreMonuments")
-                    : wanted === "nature" ? t("scoreNature")
+        const monument = state.monumentKinds || [];
+        const nature = state.natureKinds || [];
+        const kinds = query.sights === "monuments" ? monument
+                    : query.sights === "nature" ? nature
+                    : monument.concat(nature);
+        const seen = kinds.reduce((n, k) => n + (counts[k] || 0), 0);
+        const label = query.sights === "monuments" ? t("scoreMonuments")
+                    : query.sights === "nature" ? t("scoreNature")
                     : t("scoreSights");
-        bars.appendChild(bar(label, extra.sights));
+        bars.appendChild(bar(label, extra.sights, String(seen)));
       }
     }
 
-    const counts = (state.poiCounts && state.poiCounts[route.id]) || {};
     const present = state.poiKinds.filter((kind) => (counts[kind] || 0) > 0);
     // A route on fast roads is still offered when nothing calmer exists, so it
     // has to say so on the card rather than hide inside the traffic score.
@@ -1343,6 +1402,8 @@ async function search() {
     if (notices.includes("no_exact_distance_match")) notes.push(t("noExactDistance"));
     if (notices.includes("alternatives_unavailable")) notes.push(t("altsUnavailable"));
     if (notices.includes("busy_roads_only")) notes.push(t("busyRoadsOnly"));
+    if (notices.includes("gain_target_unreachable")) notes.push(t("noFlatOption"));
+    if (notices.includes("distance_target_unreachable")) notes.push(t("noDistanceOption"));
     message(notes.join(" "), notes.length ? "warn" : "");
 
     renderContext();

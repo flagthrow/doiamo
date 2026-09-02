@@ -205,3 +205,59 @@ def test_big_road_share_counts_metres_not_exposure_weight():
     ranked, _, _ = candidates.rank([route], request(), CALM, {})
 
     assert ranked[0].big_road_share == 0.3
+
+
+# --- saying so when the request cannot be met ------------------------------
+
+def _hilly(gain_m, distance_m, lon):
+    coords = []
+    for i in range(181):
+        angle = 2 * math.pi * i / 180
+        coords.append([
+            lon + 0.014 * math.cos(angle),
+            42.35 + 0.010 * math.sin(angle),
+            700.0 + gain_m * (0.5 - 0.5 * math.cos(2 * angle)),
+        ])
+    return RawRoute(
+        coordinates=coords, distance_m=distance_m, duration_s=distance_m / 2.8,
+        surface={3: distance_m}, waytype={3: distance_m},
+    )
+
+
+def test_a_flat_request_in_a_hilly_place_says_so():
+    """Scoring zero on the one thing that was asked for is a failure, not a low
+    score — ranking it first in silence presents it as an answer."""
+    routes = [_hilly(g, d, 13.40 + i * 0.02) for i, (g, d) in
+              enumerate(((420.0, 11300.0), (380.0, 10600.0), (350.0, 10100.0)))]
+    request = SearchRequest(
+        lat=42.35, lon=13.40, sport="running", distance_km=10.0,
+        elevation_gain_m=40.0, surface="asphalt", sights="both", mode="loop",
+    )
+
+    ranked, _, notices = candidates.rank(routes, request, CALM, {})
+
+    assert "gain_target_unreachable" in notices
+    assert ranked                       # still shows the flattest it found
+    assert ranked[0].ascent_m == min(r.ascent_m for r in ranked)
+
+
+def test_a_reachable_climb_target_says_nothing():
+    routes = [_hilly(g, 10000.0, 13.40 + i * 0.02) for i, g in enumerate((20.0, 30.0))]
+    request = SearchRequest(
+        lat=42.35, lon=13.40, sport="running", distance_km=10.0,
+        elevation_gain_m=40.0, surface="asphalt", sights="both", mode="loop",
+    )
+
+    _, _, notices = candidates.rank(routes, request, CALM, {})
+
+    assert "gain_target_unreachable" not in notices
+
+
+def test_wind_carries_no_weight_around_a_loop():
+    """Every metre into the wind is repaid by a metre with it, so the share is
+    pinned near a constant that depends on the day and not on the route."""
+    assert "wind" not in config.WEIGHTS["running"]
+    assert "wind" not in config.WEIGHTS["cycling"]
+    assert "wind" in config.ROUTE_WEIGHTS["running"]
+    assert round(sum(config.WEIGHTS["running"].values()), 6) == 1.0
+    assert round(sum(config.WEIGHTS["cycling"].values()), 6) == 1.0

@@ -152,22 +152,25 @@ ROUTE_WEIGHTS: Dict[str, Dict[str, float]] = {
     },
 }
 
+# Loop weights carry no wind term. On a closed loop every metre into the wind
+# is repaid by a metre with it, so the share is pinned near a constant that
+# depends on the day's wind speed and not on the route — it scored every
+# candidate identically and told the reader nothing about any of them. It
+# stays in ROUTE_WEIGHTS, where going one way genuinely can be into the wind.
 WEIGHTS: Dict[str, Dict[str, float]] = {
     "running": {
-        "distance": 0.20,
-        "gain": 0.20,
-        "surface": 0.25,
-        "traffic": 0.20,
-        "wind": 0.05,
-        "air": 0.10,
+        "distance": 0.21,
+        "gain": 0.21,
+        "surface": 0.26,
+        "traffic": 0.21,
+        "air": 0.11,
     },
     "cycling": {
-        "distance": 0.18,
-        "gain": 0.18,
-        "surface": 0.18,
-        "traffic": 0.31,
-        "wind": 0.10,
-        "air": 0.05,
+        "distance": 0.20,
+        "gain": 0.20,
+        "surface": 0.20,
+        "traffic": 0.34,
+        "air": 0.06,
     },
 }
 

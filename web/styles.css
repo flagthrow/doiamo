@@ -560,7 +560,9 @@ button.primary:disabled { opacity: .6; cursor: progress; filter: none; transform
 
 .bars { margin-top: 12px; display: grid; gap: 7px; }
 .bar {
-  display: grid; grid-template-columns: 104px 1fr 28px; gap: 10px;
+  /* The right column now carries a measurement with its unit ("100% asfalto",
+     "+406 m"), not a bare two-digit score, so it needs room to say it. */
+  display: grid; grid-template-columns: 100px 1fr 118px; gap: 10px;
   align-items: center; font-size: 11.5px; color: var(--ink-3);
 }
 .bar .track { height: 6px; border-radius: 999px; background: var(--card-sunken); overflow: hidden; }
@@ -568,7 +570,10 @@ button.primary:disabled { opacity: .6; cursor: progress; filter: none; transform
   height: 100%; background: var(--accent-mark); border-radius: 999px;
   transition: width .4s cubic-bezier(.4, 0, .2, 1);
 }
-.bar .num { text-align: right; font-weight: 560; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bar .num {
+  text-align: right; font-weight: 560; color: var(--ink-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 
 .result .actions { margin-top: 12px; }
 .result .actions a {
@@ -712,6 +717,11 @@ footer p { margin: 0 0 5px; }
   background: var(--card-sunken); color: var(--ink-2);
 }
 .poi-badges .badge .n { font-weight: 620; font-variant-numeric: tabular-nums; }
+
+/* A route that misses the thing you asked for says so on the row itself,
+   rather than leaving a zero-length bar to be interpreted. */
+.bar.miss .num { color: var(--warn); font-weight: 620; }
+.bar.miss .fill { background: var(--warn); }
 /* Amber, not red: the route is usable, it just is not quiet. */
 .poi-badges .badge.road {
   background: var(--warn-wash, rgba(203, 132, 26, .14));
@@ -731,7 +741,7 @@ footer p { margin: 0 0 5px; }
 @media (max-width: 900px) {
   header .tagline { display: none; }
   .results-page { padding-left: 12px; padding-right: 12px; }
-  .bar { grid-template-columns: 96px 1fr 28px; }
+  .bar { grid-template-columns: 92px 1fr 112px; }
   .map-styles button { padding: 6px 9px; font-size: 11.5px; }
   .hero { min-height: 0; padding-top: 24px; }
   .pitch { padding-top: 40px; padding-bottom: 48px; }

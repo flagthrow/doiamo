@@ -403,8 +403,26 @@ async def index() -> Response:
     page = WEB_DIR / "index.html"
     if not page.exists():
         return JSONResponse({"error": "web/index.html missing"}, status_code=500)
-    return FileResponse(page)
+    return FileResponse(page, headers={"Cache-Control": "no-cache"})
+
+
+class RevalidatedStatics(StaticFiles):
+    """Static files the browser must check before reusing.
+
+    Without a Cache-Control header a browser is free to invent its own
+    freshness window, and Chrome will happily serve app.js and styles.css from
+    memory for the rest of a session. That means a deploy can land new markup
+    against last week's stylesheet — and during development a CSS change simply
+    does not appear, which is how a fixed layout looked broken for an hour.
+    "no-cache" is not "do not store": the file is still cached, the browser just
+    has to revalidate, and an unchanged file comes back as an empty 304.
+    """
+
+    async def get_response(self, path: str, scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
 
 
 if WEB_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+    app.mount("/static", RevalidatedStatics(directory=str(WEB_DIR)), name="static")

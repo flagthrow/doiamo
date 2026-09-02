@@ -98,10 +98,10 @@ const STRINGS = {
     scoreTraffic: "Lontano dal traffico",
     scoreWind: "Vento a favore",
     scoreAir: "Aria",
-    scoreWater: "Acqua lungo il percorso",
+    scoreWater: "Acqua",
     scoreMonuments: "Monumenti sul percorso",
     scoreNature: "Verde sul percorso",
-    scoreSights: "Cose belle da vedere",
+    scoreSights: "Cose belle",
     paved: "asfaltato",
     trafficLow: "poco traffico",
     trafficMid: "traffico medio",
@@ -120,6 +120,15 @@ const STRINGS = {
     busyRoadsOnly:
       "Da qui si esce solo su strade a scorrimento: nessun percorso tranquillo disponibile.",
     bigRoad: "{pct}% su strade grandi",
+    bigRoadsShort: "strade grandi",
+    headwindShort: "controvento",
+    unpaved: "sterrato",
+    everyKm: "ogni {km} km",
+    none: "nessuna",
+    noFlatOption:
+      "Qui non ci sono percorsi con il dislivello che hai chiesto: sotto trovi i pi\u00f9 piatti.",
+    noDistanceOption:
+      "Nessun percorso vicino alla distanza che hai chiesto: sotto trovi i pi\u00f9 simili.",
     bigRoadWhy:
       "Quota del percorso su statali e strade a scorrimento. Autostrade e superstrade "
       + "vietate a piedi e in bici non vengono mai usate.",
@@ -244,10 +253,10 @@ const STRINGS = {
     scoreTraffic: "Away from traffic",
     scoreWind: "Wind",
     scoreAir: "Air",
-    scoreWater: "Water on the way",
+    scoreWater: "Water",
     scoreMonuments: "Monuments on the way",
     scoreNature: "Green on the way",
-    scoreSights: "Worth looking at",
+    scoreSights: "Worth seeing",
     paved: "paved",
     trafficLow: "low traffic",
     trafficMid: "medium traffic",
@@ -265,6 +274,15 @@ const STRINGS = {
     busyRoadsOnly:
       "Every way out of here is a fast road — no quiet route was available.",
     bigRoad: "{pct}% on big roads",
+    bigRoadsShort: "big roads",
+    headwindShort: "headwind",
+    unpaved: "unpaved",
+    everyKm: "every {km} km",
+    none: "none",
+    noFlatOption:
+      "Nothing here has the climb you asked for \u2014 these are the flattest.",
+    noDistanceOption:
+      "Nothing came out near the distance you asked for \u2014 these are the closest.",
     bigRoadWhy:
       "Share of the route on state and trunk roads. Motorways and other roads "
       + "closed to pedestrians and bikes are never used.",

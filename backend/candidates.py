@@ -364,6 +364,20 @@ def rank(
 
     scored.sort(key=lambda row: row[0], reverse=True)
 
+    # Scoring zero on the one thing that was asked for is not a low score, it
+    # is a failure — and ranking it first anyway, silently, presents it as an
+    # answer. Where there is no flat loop to be had (L'Aquila has hills in
+    # every direction) the honest reply is to say so and show the flattest.
+    if has_gain_target and scored:
+        best_gain = min(item.ascent_m for _, item, _ in scored)
+        asked = request.elevation_gain_m or 0.0
+        if best_gain > asked + max(60.0, 0.5 * asked):
+            notices.append("gain_target_unreachable")
+    if has_distance_target and scored:
+        closest = min(abs(item.distance_m - target_m) for _, item, _ in scored)
+        if closest > 0.25 * target_m:
+            notices.append("distance_target_unreachable")
+
     out: List[RouteCandidate] = []
     seen_geometries: List[set] = []
     for _, item, scores in scored:
