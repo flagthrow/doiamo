@@ -35,7 +35,33 @@ def test_the_motivating_sentence():
         "distance_km": 10.0,
         "elevation_gain_m": FLAT_TARGET_M,
         "surface": "asphalt",
+        # "Rimanere in citta" is a constraint on where the route goes. Read as
+        # a surface preference alone it only set "asphalt", which was already
+        # the default — so the clause changed nothing and the same sentence
+        # with and without it returned identical results.
+        "area": "urban",
     }
+
+
+def test_staying_in_town_changes_the_search():
+    """The bug this covers: two sentences, one of them specific, same results."""
+    generic = read("voglio correre 10k poco dislivello")
+    specific = read("voglio correre 10k poco dislivello e voglio rimanere in citta'")
+
+    assert generic.area is None
+    assert specific.area == "urban"
+    assert generic.model_dump() != specific.model_dump()
+
+
+@pytest.mark.parametrize("sentence", [
+    "portami fuori citta",
+    "voglio correre lontano dalla citta",
+    "un giro in campagna",
+    "a run out of town",
+])
+def test_wanting_out_of_town_is_not_wanting_to_stay_in_it(sentence):
+    """"fuori citta" contains "citta"."""
+    assert read(sentence).area is None
 
 
 # --- normalisation ---------------------------------------------------------
@@ -264,7 +290,7 @@ def test_nothing_is_read_from_nothing():
 
 def test_the_reading_is_shown_back_in_italian():
     said = summarise(read("correre 10 km senza dislivello in citta"), "it")
-    assert said == ["Corsa", "10 km", "poco dislivello", "asfalto"]
+    assert said == ["Corsa", "10 km", "poco dislivello", "in citta", "asfalto"]
 
 
 def test_the_reading_is_shown_back_in_english():

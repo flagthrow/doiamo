@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-from .config import MODES, SIGHTS, SPORTS, SURFACE_PREFERENCES
+from .config import AREAS, MODES, SIGHTS, SPORTS, SURFACE_PREFERENCES
 
 
 class SearchRequest(BaseModel):
@@ -28,6 +28,9 @@ class SearchRequest(BaseModel):
     surface: str = Field("asphalt")
     # Monuments or greenery is a preference, not a measure of quality.
     sights: str = Field("both")
+    # "any" unless they asked to stay in town, which is a constraint on where
+    # the route goes rather than on what it is paved with.
+    area: str = Field("any")
 
     @model_validator(mode="after")
     def _check_mode(self) -> "SearchRequest":
@@ -47,8 +50,10 @@ class SearchRequest(BaseModel):
         sport = self.sport if self.sport in SPORTS else "running"
         surface = self.surface if self.surface in SURFACE_PREFERENCES else "asphalt"
         sights = self.sights if self.sights in SIGHTS else "both"
+        area = self.area if self.area in AREAS else "any"
         return self.model_copy(
-            update={"sport": sport, "surface": surface, "sights": sights}
+            update={"sport": sport, "surface": surface, "sights": sights,
+                    "area": area}
         )
 
 
@@ -78,6 +83,9 @@ class RouteCandidate(BaseModel):
     scores: RouteScores
     paved_share: float
     traffic_exposure: float
+    # Share of the route on residential streets and pavements — the proxy for
+    # being in a built-up area at all.
+    urban_share: float = 0.0
     # Share of the route's length on state or trunk roads. Separate from the
     # weighted exposure score because a badge needs a fraction of metres, not a
     # ranking term.
@@ -168,6 +176,7 @@ class InterpretResponse(BaseModel):
     elevation_gain_m: Optional[float] = None
     surface: Optional[str] = None
     sights: Optional[str] = None
+    area: Optional[str] = None
     start: Optional["GeocodeResult"] = None
     end: Optional["GeocodeResult"] = None
     # Named but not found, so the interface can say so rather than ignore it.

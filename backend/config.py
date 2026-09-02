@@ -113,6 +113,23 @@ WAYTYPE_LABELS: Dict[int, str] = {
 # Steps are miserable on a run and unrideable on a bike.
 STEPS_WAYTYPE = 8
 
+# "Voglio rimanere in citta" is a request about where you are, not about what
+# is under your feet — it was being read as a surface preference, which is why
+# adding it to a sentence changed nothing. There is no urban boundary in the
+# data we hold, but the road network itself is a decent proxy: residential
+# streets, pavements and steps are what a built-up area is made of, and an
+# agricultural track is what it is not. Cycleways and paths are deliberately
+# left out of both — a park path and a canal towpath sit either side of the
+# line and counting them would only add noise.
+URBAN_WAYTYPES = (3, 7, 8)      # street, footway, steps
+RURAL_WAYTYPES = (1, 2, 5)      # state road, road, track
+
+AREAS: List[str] = ["any", "urban"]
+
+# How much of the ranking "stay in town" takes over. Enough to reorder the
+# candidates, not so much that it outvotes the distance you asked for.
+URBAN_WEIGHT = float(os.environ.get("URBAN_WEIGHT", "0.22"))
+
 # Motorways never reach the scorer: they are absent from the foot and bike
 # graphs because pedestrians and bicycles are banned from them, so the router
 # cannot return one. State and trunk roads are a different matter — they are

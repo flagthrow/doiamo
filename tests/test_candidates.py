@@ -261,3 +261,28 @@ def test_wind_carries_no_weight_around_a_loop():
     assert "wind" in config.ROUTE_WEIGHTS["running"]
     assert round(sum(config.WEIGHTS["running"].values()), 6) == 1.0
     assert round(sum(config.WEIGHTS["cycling"].values()), 6) == 1.0
+
+
+def test_staying_in_town_prefers_streets_over_tracks():
+    """No urban boundary exists in the data we hold, but the road network is a
+    decent proxy: streets and pavements are what a built-up area is made of."""
+    streets = make_route(waytype={3: 8000.0, 7: 2000.0})
+    tracks = make_route(waytype={5: 7000.0, 2: 3000.0}, center_lon=9.26)
+
+    anywhere, _, _ = candidates.rank([streets, tracks], request(), CALM, {})
+    in_town, _, _ = candidates.rank(
+        [streets, tracks], request(area="urban"), CALM, {}
+    )
+
+    assert in_town[0].urban_share > in_town[1].urban_share
+    gap_in_town = in_town[0].scores.total - in_town[1].scores.total
+    gap_anywhere = abs(anywhere[0].scores.total - anywhere[1].scores.total)
+    assert gap_in_town > gap_anywhere
+
+
+def test_the_weights_still_sum_to_one_when_staying_in_town():
+    """The urban term is taken out of the other axes, not added on top, so
+    totals stay comparable between one search and the next."""
+    routes = [make_route(waytype={3: 10000.0})]
+    scored, _, _ = candidates.rank(routes, request(area="urban"), CALM, {})
+    assert 0.0 <= scored[0].scores.total <= 1.0

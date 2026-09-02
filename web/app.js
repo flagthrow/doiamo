@@ -9,6 +9,9 @@ const state = {
   assumedSport: false,
   surface: "asphalt",
   sights: "both",
+  area: "any",     // "urban" when the sentence asked to stay in town
+  // Which cards the reader opened, so a re-render does not fold them again.
+  expanded: {},
   distanceKm: 10,
   gainM: 150,
   // Both targets are opt-in. A default climb target of 150 m is unreachable
@@ -624,6 +627,7 @@ function renderSummary() {
     state.mode === "loop" ? t("modeLoop") : t("modeRoute"),
     t(state.sport),
     state.mode === "loop" || !state.distanceAny ? state.distanceKm + " km" : null,
+    state.area === "urban" ? t("areaUrban") : null,
     t(state.surface),
   ].filter(Boolean).join(" · ");
 
@@ -1117,9 +1121,36 @@ function renderResults() {
     link.textContent = t("download");
     actions.append(mapButton, link);
 
-    card.append(head, bars);
-    if (badgeRow) card.appendChild(badgeRow);
-    card.appendChild(actions);
+    // Five cards of eight bars each is a wall. The headline — distance, climb,
+    // surface, traffic, score — is what you choose on; the rest is what you
+    // check afterwards, so it folds away. The first is open because a page
+    // that shows nothing has not answered anything.
+    const details = document.createElement("div");
+    details.className = "details";
+    details.id = "details-" + route.id;
+    details.append(bars);
+    if (badgeRow) details.appendChild(badgeRow);
+    details.appendChild(actions);
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "details-toggle";
+    const open = state.expanded[route.id] !== undefined
+      ? state.expanded[route.id] : index === 0;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-controls", details.id);
+    toggle.textContent = open ? t("hideDetails") : t("showDetails");
+    details.hidden = !open;
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const nowOpen = details.hidden;
+      details.hidden = !nowOpen;
+      state.expanded[route.id] = nowOpen;
+      toggle.setAttribute("aria-expanded", String(nowOpen));
+      toggle.textContent = nowOpen ? t("hideDetails") : t("showDetails");
+    });
+
+    card.append(head, toggle, details);
     box.appendChild(card);
   });
 
@@ -1179,6 +1210,9 @@ function applyIntent(data) {
   setSegmented("sport", state.sport);
   if (data.surface) { state.surface = data.surface; setSegmented("surface", data.surface); }
   if (data.sights) { state.sights = data.sights; setSegmented("sights", data.sights); }
+  // Said or not said each time: "rimanere in citta" is part of this sentence,
+  // not a preference that should outlive it.
+  state.area = data.area || "any";
 
   if (data.start) setPoint("start", data.start.lat, data.start.lon, data.start.label, false);
   if (data.end) setPoint("end", data.end.lat, data.end.lon, data.end.label, false);
@@ -1363,6 +1397,7 @@ async function search() {
     sport: state.sport,
     surface: state.surface,
     sights: state.sights,
+    area: state.area,
   };
   body.elevation_gain_m = state.gainAny ? null : state.gainM;
   if (state.mode === "loop") {

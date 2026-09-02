@@ -338,6 +338,7 @@ async def interpret(request: InterpretRequest) -> InterpretResponse:
         elevation_gain_m=parsed.elevation_gain_m,
         surface=parsed.surface,
         sights=parsed.sights,
+        area=parsed.area,
         start=resolved["start"],
         end=resolved["end"],
         unresolved=unresolved,

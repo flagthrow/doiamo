@@ -101,6 +101,23 @@ TRAINED_PATTERNS = [
     r"\btrained\b", r"\bfit\b", r"\bexperienced\b", r"\bathletic\b",
 ]
 
+# Staying in town is about where the route goes, not what it is paved with.
+# Read as a surface preference it only set "asfalto", which was already the
+# default — which is why adding the phrase to a sentence changed nothing.
+# Negatives first: "fuori citta" contains "citta".
+NOT_URBAN_PATTERNS = [
+    r"\bfuori\s+citt", r"\blontano\s+dalla\s+citt", r"\bfuori\s+dal\s+centro\b",
+    r"\bin\s+campagna\b", r"\bfuori\s+porta\b",
+    r"\bout\s+of\s+(?:the\s+)?(?:town|city)\b",
+    r"\baway\s+from\s+(?:the\s+)?city\b", r"\bcountryside\b",
+]
+URBAN_PATTERNS = [
+    r"\b(?:rimanere|restare|resto|rimango|stare|sto)\s+(?:\S+\s+){0,2}?citt",
+    r"\bin\s+citt", r"\bin\s+centro\b", r"\bnon\s+uscire\s+dalla\s+citt",
+    r"\bstay(?:ing)?\s+(?:\S+\s+){0,2}?(?:in|inside)\s+(?:the\s+)?(?:city|town)\b",
+    r"\bin\s+(?:the\s+)?(?:city|town)\b", r"\bdowntown\b", r"\burban\b",
+]
+
 # Rough pace, for turning "un'ora" into a distance.
 KMH = {"running": 10.0, "cycling": 20.0}
 
@@ -115,6 +132,7 @@ NUMBER_WORDS = {
 
 
 class Intent(BaseModel):
+    area: Optional[str] = None
     sport: Optional[str] = None
     mode: Optional[str] = None
     distance_km: Optional[float] = None
@@ -239,6 +257,18 @@ def _fitness(text: str) -> str:
         if re.search(pattern, text):
             return "trained"
     return "normal"
+
+
+def _area(text: str) -> Optional[str]:
+    """"urban" when they asked to stay in town, None when they said nothing —
+    and None, not "urban", when they asked for the opposite."""
+    for pattern in NOT_URBAN_PATTERNS:
+        if re.search(pattern, text):
+            return None
+    for pattern in URBAN_PATTERNS:
+        if re.search(pattern, text):
+            return "urban"
+    return None
 
 
 def _size(text: str) -> Optional[str]:
@@ -371,6 +401,7 @@ def read_detailed(sentence: str) -> Tuple[Intent, bool]:
         mode = "loop"
 
     return Intent(
+        area=_area(rest),
         sport=sport,
         mode=mode,
         distance_km=distance,
@@ -405,6 +436,8 @@ def summarise(intent: Intent, language: str = "it") -> List[str]:
             out.append("un po' di dislivello" if it else "some climbing")
         else:
             out.append("molto dislivello" if it else "lots of climbing")
+    if intent.area == "urban":
+        out.append("in citta" if it else "in town")
     if intent.surface:
         labels = {"asphalt": ("asfalto", "asphalt"), "mixed": ("misto", "mixed"),
                   "trail": ("sterrato", "trail")}
@@ -487,6 +520,9 @@ A number they gave always beats the table, and so does an explicit request \
 about hills.
 surface: "asphalt" for roads and cities, "trail" for dirt and paths, "mixed"
 sights: "monuments" for historic things, "nature" for parks and greenery
+area: "urban" only if they ask to stay in town or in the centre. This is about \
+where the route goes, not what it is paved with. Leave it null if they say \
+nothing, and null — never "urban" — if they want to get out of town.
 start_text: the place they set off from, as written. Only a name you could
 find on a map — a town, a district, a named park, a street, a landmark. Never a
 description of where they want to be, like "fuori citta", "out of town", "in

@@ -164,8 +164,8 @@ class _Measured:
 
     __slots__ = (
         "raw", "coords", "distance_m", "ascent_m", "descent_m", "paved_share",
-        "traffic_exposure", "big_road_share", "headwind_share", "step_distance_m",
-        "air", "cells",
+        "traffic_exposure", "big_road_share", "urban_share", "headwind_share",
+        "step_distance_m", "air", "cells",
     )
 
     def __init__(self, raw: RawRoute, weather: WeatherContext) -> None:
@@ -182,6 +182,7 @@ class _Measured:
         self.paved_share = _weighted_share(raw.surface, config.SURFACE_PAVEDNESS)
         self.traffic_exposure = _weighted_share(raw.waytype, config.WAYTYPE_EXPOSURE)
         self.big_road_share = _share_of(raw.waytype, config.BIG_ROAD_WAYTYPES)
+        self.urban_share = _share_of(raw.waytype, config.URBAN_WAYTYPES)
         self.step_distance_m = raw.waytype.get(config.STEPS_WAYTYPE, 0.0)
         self.headwind_share = geo.headwind_exposure(
             self.coords,
@@ -302,6 +303,13 @@ def rank(
     weights = dict(
         (config.WEIGHTS if request.is_loop else config.ROUTE_WEIGHTS)[request.sport]
     )
+    if request.area == "urban":
+        # Taken from the other axes rather than added on top, so the weights
+        # still sum to one and the totals stay comparable across searches.
+        share = config.URBAN_WEIGHT
+        for name in weights:
+            weights[name] *= 1.0 - share
+        weights["urban"] = share
     if not use_air:
         weights.pop("air", None)
     # In loop mode climb only counts when it was asked for. In route mode it
@@ -327,6 +335,11 @@ def rank(
             "traffic": 1.0 - item.traffic_exposure,
             "wind": 1.0 - item.headwind_share,
         }
+        if "urban" in weights:
+            # Streets and pavements count for you, farm tracks and trunk roads
+            # against; everything else is neither and simply does not vote.
+            rural = _share_of(item.raw.waytype, config.RURAL_WAYTYPES)
+            parts["urban"] = max(0.0, min(1.0, 0.5 + (item.urban_share - rural) / 2.0))
         if "gain" in weights:
             parts["gain"] = (
                 _gain_score(item.ascent_m, request.elevation_gain_m or 0.0)
@@ -399,6 +412,7 @@ def rank(
                 paved_share=round(item.paved_share, 4),
                 traffic_exposure=round(item.traffic_exposure, 4),
                 big_road_share=round(item.big_road_share, 4),
+                urban_share=round(item.urban_share, 4),
                 headwind_share=round(item.headwind_share, 4),
                 step_distance_m=round(item.step_distance_m, 1),
                 surface_breakdown=_breakdown(item.raw.surface, config.SURFACE_LABELS),

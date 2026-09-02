@@ -720,6 +720,25 @@ footer p { margin: 0 0 5px; }
 
 /* A route that misses the thing you asked for says so on the row itself,
    rather than leaving a zero-length bar to be interpreted. */
+/* The fold. A quiet full-width row rather than a button that competes with
+   the two real actions inside it. */
+.details-toggle {
+  width: 100%; margin-top: 10px; padding: 7px 0;
+  font: inherit; font-size: 12px; font-weight: 550; cursor: pointer;
+  background: none; border: 0; border-top: 1px solid var(--line);
+  color: var(--ink-3); text-align: left;
+  display: flex; align-items: center; gap: 6px;
+  transition: color .16s ease;
+}
+.details-toggle::after {
+  content: ""; width: 5px; height: 5px; margin-top: -3px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg); transition: transform .18s ease;
+}
+.details-toggle[aria-expanded="true"]::after { transform: rotate(-135deg); margin-top: 2px; }
+.details-toggle:hover { color: var(--ink); }
+.details-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .bar.miss .num { color: var(--warn); font-weight: 620; }
 .bar.miss .fill { background: var(--warn); }
 /* Amber, not red: the route is usable, it just is not quiet. */
