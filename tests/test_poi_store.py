@@ -234,3 +234,38 @@ def test_a_real_download_lands_at_the_target(tmp_path):
         assert target.read_bytes() == payload
     finally:
         server.shutdown()
+
+
+def test_healthz_can_explain_a_missing_database(tmp_path, monkeypatch):
+    """A deployment that silently fell back to Overpass looks identical to a
+    working one until someone notices the POIs are gone. It has to say why."""
+    import importlib
+
+    import backend.poi_store as store
+
+    monkeypatch.setenv("POI_DB", str(tmp_path / "absent" / "pois.sqlite"))
+    monkeypatch.delenv("POI_DB_URL", raising=False)
+    importlib.reload(store)
+
+    assert store.ensure_downloaded() is False
+    assert store.LAST_DOWNLOAD["error"] == "POI_DB_URL is not set"
+
+
+def test_a_read_only_directory_is_reported_not_swallowed(tmp_path, monkeypatch):
+    import importlib
+    import os
+
+    import backend.poi_store as store
+
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    os.chmod(locked, 0o500)
+    try:
+        monkeypatch.setenv("POI_DB", str(locked / "sub" / "pois.sqlite"))
+        monkeypatch.setenv("POI_DB_URL", "http://example.invalid/db")
+        importlib.reload(store)
+        assert store.ensure_downloaded() is False
+        assert "cannot write" in str(store.LAST_DOWNLOAD["error"])
+    finally:
+        os.chmod(locked, 0o700)
+        importlib.reload(store)

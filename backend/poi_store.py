@@ -132,6 +132,12 @@ class LocalPoiStore:
         ]
 
 
+# Filled in by ensure_downloaded so /api/healthz can say what went wrong. A
+# deployment that silently falls back to Overpass is indistinguishable from a
+# working one until someone notices the POIs are missing.
+LAST_DOWNLOAD: Dict[str, object] = {"attempted": False, "ok": None, "error": None}
+
+
 def ensure_downloaded(
     path: str = DEFAULT_PATH,
     url: str = "",
@@ -147,17 +153,32 @@ def ensure_downloaded(
     and quietly report as empty.
     """
     if os.path.exists(path):
+        LAST_DOWNLOAD.update(attempted=False, ok=True, error="already present")
         return True
     url = url or DOWNLOAD_URL
     if not url:
+        LAST_DOWNLOAD.update(attempted=False, ok=False, error="POI_DB_URL is not set")
         return False
 
     import shutil
     import tempfile
     import urllib.request
 
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    handle, staging = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".part")
+    directory = os.path.dirname(path) or "."
+    try:
+        os.makedirs(directory, exist_ok=True)
+        probe = os.path.join(directory, ".write-probe")
+        with open(probe, "w") as check:
+            check.write("")
+        os.remove(probe)
+    except OSError as problem:
+        LAST_DOWNLOAD.update(
+            attempted=False, ok=False,
+            error="cannot write to {}: {}".format(directory, problem),
+        )
+        return False
+
+    handle, staging = tempfile.mkstemp(dir=directory, suffix=".part")
     os.close(handle)
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "Doiamo/0.1"})
@@ -167,8 +188,13 @@ def ensure_downloaded(
         if os.path.getsize(staging) < 1024:
             raise OSError("downloaded file is too small to be a database")
         os.replace(staging, path)
+        LAST_DOWNLOAD.update(attempted=True, ok=True, error=None)
         return True
-    except Exception:
+    except Exception as problem:
         if os.path.exists(staging):
             os.remove(staging)
+        LAST_DOWNLOAD.update(
+            attempted=True, ok=False,
+            error="{}: {}".format(type(problem).__name__, problem),
+        )
         return False

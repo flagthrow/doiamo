@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import candidates, config, geo, health, poi
 from .geocoding import PhotonGeocoder
+from . import poi_store as poi_store_module
 from .poi_store import LocalPoiStore, ensure_downloaded
 from .cache import TTLCache
 from .gpx import build_gpx, filename_for
@@ -114,6 +115,13 @@ async def healthz() -> Dict[str, object]:
         "routing_configured": app.state.engine.configured,
         "poi_source": "local" if store.available else "overpass",
         "poi_local_count": store.count,
+        # Enough to diagnose a deployment that quietly fell back, without logs.
+        "poi_db": {
+            "path": store.path,
+            "exists": os.path.exists(store.path),
+            "url_configured": bool(poi_store_module.DOWNLOAD_URL),
+            "download": poi_store_module.LAST_DOWNLOAD,
+        },
         "routing_budget": app.state.engine.budget.status()
         if hasattr(app.state.engine, "budget") else None,
     }
