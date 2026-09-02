@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 ORS_BASE_URL = os.environ.get("ORS_BASE_URL", "https://api.openrouteservice.org")
 ORS_API_KEY = os.environ.get("ORS_API_KEY", "")
@@ -112,6 +112,19 @@ WAYTYPE_LABELS: Dict[int, str] = {
 
 # Steps are miserable on a run and unrideable on a bike.
 STEPS_WAYTYPE = 8
+
+# Motorways never reach the scorer: they are absent from the foot and bike
+# graphs because pedestrians and bicycles are banned from them, so the router
+# cannot return one. State and trunk roads are a different matter — they are
+# legal, they are often the only way through, and the router will happily use
+# them. Penalising them in the score is not enough: if every candidate is bad
+# the least-bad one still wins and gets shown as a recommendation. So they get
+# a ceiling as well as a weight.
+BIG_ROAD_WAYTYPES: Tuple[int, ...] = (1, 2)  # state road, road
+BIG_ROAD_REJECT_SHARE = float(os.environ.get("BIG_ROAD_REJECT_SHARE", "0.30"))
+# Above this a route is still offered — sometimes there is no alternative — but
+# it is labelled, because "quiet" is the promise this product makes.
+BIG_ROAD_WARN_SHARE = float(os.environ.get("BIG_ROAD_WARN_SHARE", "0.15"))
 
 # --- Scoring --------------------------------------------------------------
 # A cyclist weights traffic proximity far more heavily than a runner; a runner

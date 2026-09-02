@@ -88,7 +88,9 @@ def test_no_distance_filter_in_route_mode():
 
 def test_route_mode_weights_traffic_higher_for_cycling():
     quiet = line(waytype={6: 6000.0})
-    busy = line(bow=0.03, waytype={1: 6000.0})
+    # Under BIG_ROAD_REJECT_SHARE — over it the route is filtered out before
+    # scoring, which is a different behaviour with its own test.
+    busy = line(bow=0.03, waytype={1: 1500.0, 3: 4500.0})
     run, _, _ = candidates.rank([quiet, busy], request(sport="running"), CALM, {})
     bike, _, _ = candidates.rank([quiet, busy], request(sport="cycling"), CALM, {})
     assert (bike[0].scores.total - bike[1].scores.total) > (

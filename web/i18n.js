@@ -3,6 +3,16 @@
 const STRINGS = {
   it: {
     headline: "Dove vuoi andare oggi?",
+    askPlaceholder: "Scrivilo come lo diresti: \u201cvoglio correre 10 km senza troppo dislivello, restando in citt\u00e0\u201d",
+    askGo: "Cerca",
+    tryClassic: "Prova la ricerca classica",
+    hideClassic: "Torna alla ricerca a parole",
+    askEmpty: "Scrivi cosa hai in mente, oppure usa la ricerca classica.",
+    askNothing: "Non ho capito abbastanza. Prova a dire distanza e punto di partenza.",
+    askUnresolved: "Non ho trovato:",
+    fromHere: "da dove sei ora",
+    assumed: "presunto",
+    tapToChange: "tocca per cambiare",
     tagline: "Trova il percorso giusto. Distanza, dislivello, fondo — e l'aria che respiri.",
     heroNote: "Ovunque ci sia una strada · corsa e bici · GPX da scaricare · nessun account",
 
@@ -94,6 +104,12 @@ const STRINGS = {
     noExactDistance:
       "Nessun giro esattamente della distanza chiesta: qui sotto i più vicini.",
     altsUnavailable: "Un solo percorso possibile tra questi due punti.",
+    busyRoadsOnly:
+      "Da qui si esce solo su strade a scorrimento: nessun percorso tranquillo disponibile.",
+    bigRoad: "{pct}% su strade grandi",
+    bigRoadWhy:
+      "Quota del percorso su statali e strade a scorrimento. Autostrade e superstrade "
+      + "vietate a piedi e in bici non vengono mai usate.",
     error: "Qualcosa è andato storto",
     keyMissing:
       "Manca la chiave OpenRouteService. Imposta ORS_API_KEY e riavvia il server.",
@@ -122,6 +138,16 @@ const STRINGS = {
 
   en: {
     headline: "Where do you want to go today?",
+    askPlaceholder: "Say it however you like: \u201cI want to run 10 km without much climbing, staying in the city\u201d",
+    askGo: "Search",
+    tryClassic: "Try the classic search",
+    hideClassic: "Back to searching in words",
+    askEmpty: "Write what you have in mind, or use the classic search.",
+    askNothing: "I did not get enough from that. Try saying a distance and a starting point.",
+    askUnresolved: "I could not find:",
+    fromHere: "from where you are",
+    assumed: "assumed",
+    tapToChange: "tap to change",
     tagline: "Find the right route. Distance, climb, surface — and the air you breathe.",
     heroNote: "Anywhere there is a road · running and cycling · GPX to download · no account",
 
@@ -212,6 +238,12 @@ const STRINGS = {
     airVaries: "Air quality differs across these routes, so it counts in the score.",
     noExactDistance: "No loop matched the exact distance — closest ones below.",
     altsUnavailable: "Only one route is possible between these two points.",
+    busyRoadsOnly:
+      "Every way out of here is a fast road — no quiet route was available.",
+    bigRoad: "{pct}% on big roads",
+    bigRoadWhy:
+      "Share of the route on state and trunk roads. Motorways and other roads "
+      + "closed to pedestrians and bikes are never used.",
     error: "Something went wrong",
     keyMissing: "OpenRouteService key missing. Set ORS_API_KEY and restart the server.",
     rateLimited: "Too many requests to the routing service. Try again in a minute.",

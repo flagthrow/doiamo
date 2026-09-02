@@ -91,7 +91,9 @@ def test_trail_request_flips_the_order():
 
 def test_cycling_penalises_traffic_harder_than_running():
     quiet = make_route(waytype={6: 10000.0})                        # cycleway
-    busy = make_route(waytype={1: 10000.0}, center_lon=9.26)        # state road
+    # Kept under BIG_ROAD_REJECT_SHARE: this test is about how the two sports
+    # weight traffic, and a route over the ceiling never reaches the scorer.
+    busy = make_route(waytype={1: 2500.0, 3: 7500.0}, center_lon=9.26)
 
     run, _, _ = candidates.rank([quiet, busy], request(sport="running"), CALM, {})
     bike, _, _ = candidates.rank([quiet, busy], request(sport="cycling"), CALM, {})
@@ -170,3 +172,36 @@ def test_gain_is_excluded_from_weights_when_not_requested():
     routes, _, _ = candidates.rank([route], request(elevation_gain_m=None), CALM, {})
     assert routes[0].scores.gain == 0.0
     assert routes[0].scores.total > 0.0
+
+
+# --- fast-road ceiling -----------------------------------------------------
+# Motorways cannot appear at all — they are not in the foot or bike graph — so
+# these cover the roads that are legal, unpleasant, and up to us to handle.
+
+def test_route_mostly_on_state_roads_is_dropped_when_a_calmer_one_exists():
+    quiet = make_route(waytype={6: 10000.0})
+    busy = make_route(waytype={1: 8000.0, 3: 2000.0}, center_lon=9.26)
+
+    ranked, _, notices = candidates.rank([quiet, busy], request(), CALM, {})
+
+    assert [r.big_road_share for r in ranked] == [0.0]
+    assert "busy_roads_only" not in notices
+
+
+def test_only_busy_routes_are_still_offered_but_flagged():
+    busy = make_route(waytype={1: 9000.0, 3: 1000.0})
+    busier = make_route(waytype={1: 10000.0}, center_lon=9.26)
+
+    ranked, _, notices = candidates.rank([busy, busier], request(), CALM, {})
+
+    # An empty page helps nobody where every way out is a fast road.
+    assert len(ranked) == 2
+    assert "busy_roads_only" in notices
+
+
+def test_big_road_share_counts_metres_not_exposure_weight():
+    route = make_route(waytype={1: 2000.0, 2: 1000.0, 6: 7000.0})
+
+    ranked, _, _ = candidates.rank([route], request(), CALM, {})
+
+    assert ranked[0].big_road_share == 0.3

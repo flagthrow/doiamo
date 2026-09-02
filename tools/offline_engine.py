@@ -29,6 +29,7 @@ WAYTYPE_MIXES = [
     {1: 0.4, 3: 0.6},               # a lot of main road
     {6: 0.7, 4: 0.3},               # cycleway and path
     {3: 0.5, 2: 0.5},               # streets and roads
+    {3: 0.8, 1: 0.2},               # a stretch of state road: flagged, not dropped
 ]
 
 BLOCK_M = 110.0     # rough city block, the step the staircase moves in

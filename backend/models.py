@@ -78,6 +78,10 @@ class RouteCandidate(BaseModel):
     scores: RouteScores
     paved_share: float
     traffic_exposure: float
+    # Share of the route's length on state or trunk roads. Separate from the
+    # weighted exposure score because a badge needs a fraction of metres, not a
+    # ranking term.
+    big_road_share: float = 0.0
     headwind_share: float
     step_distance_m: float
     surface_breakdown: List[SurfaceBreakdown]
@@ -147,6 +151,30 @@ class PoiResponse(BaseModel):
     source: str = "overpass"
 
 
+class InterpretRequest(BaseModel):
+    sentence: str = Field(..., min_length=1, max_length=500)
+    lang: str = Field("it")
+    # Bias place lookup towards what the map is showing.
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+
+class InterpretResponse(BaseModel):
+    understood: List[str] = []
+    # The search this became, ready to run. None where the sentence said nothing.
+    sport: Optional[str] = None
+    mode: Optional[str] = None
+    distance_km: Optional[float] = None
+    elevation_gain_m: Optional[float] = None
+    surface: Optional[str] = None
+    sights: Optional[str] = None
+    start: Optional["GeocodeResult"] = None
+    end: Optional["GeocodeResult"] = None
+    # Named but not found, so the interface can say so rather than ignore it.
+    unresolved: List[str] = []
+    used_model: bool = False
+
+
 class GeocodeResult(BaseModel):
     label: str
     lat: float
@@ -165,3 +193,6 @@ class SearchResponse(BaseModel):
     # True when the routing came from cache and cost no API calls. The scores
     # are still fresh — only the geometry is reused.
     from_cache: bool = False
+
+
+InterpretResponse.model_rebuild()

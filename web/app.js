@@ -1,7 +1,9 @@
 const state = {
   view: "home",
   mode: "route",   // both endpoints by default; the checkbox makes it a loop
-  sport: "running",
+  sport: stored("doiamo_sport", "running", ["running", "cycling"]),
+  sportChosen: false,   // true once the person corrected the guess themselves
+  assumedSport: false,
   surface: "asphalt",
   sights: "both",
   distanceKm: 10,
@@ -36,6 +38,9 @@ const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 // Every one of these is keyless — the styled providers that look best (CARTO,
 // Stadia, Thunderforest) all gate on an API key now, and Esri's canvases are
 // the only genuinely minimal ones that do not.
+// Mirrors backend BIG_ROAD_WARN_SHARE: above this the card says so out loud.
+const BIG_ROAD_WARN = 0.15;
+
 const ESRI = "https://services.arcgisonline.com/ArcGIS/rest/services/";
 const ESRI_CREDIT = "Esri";
 
@@ -1012,10 +1017,20 @@ function renderResults() {
 
     const counts = (state.poiCounts && state.poiCounts[route.id]) || {};
     const present = state.poiKinds.filter((kind) => (counts[kind] || 0) > 0);
+    // A route on fast roads is still offered when nothing calmer exists, so it
+    // has to say so on the card rather than hide inside the traffic score.
+    const bigRoad = route.big_road_share || 0;
     let badgeRow = null;
-    if (present.length) {
+    if (present.length || bigRoad >= BIG_ROAD_WARN) {
       badgeRow = document.createElement("div");
       badgeRow.className = "poi-badges";
+      if (bigRoad >= BIG_ROAD_WARN) {
+        const warn = document.createElement("span");
+        warn.className = "badge road";
+        warn.textContent = t("bigRoad").replace("{pct}", Math.round(bigRoad * 100));
+        warn.title = t("bigRoadWhy");
+        badgeRow.appendChild(warn);
+      }
       present.forEach((kind) => {
         const badge = document.createElement("span");
         badge.className = "badge";
@@ -1069,6 +1084,179 @@ function renderResults() {
     airNote.textContent = lastPayload.air.differentiates_routes ? t("airVaries") : t("airFlat");
     box.appendChild(airNote);
   }
+}
+
+
+// ---------------------------------------------------------------- the sentence box
+// A form makes you translate what you want into six controls. This lets you
+// say it, then shows what it understood — a box that silently reinterprets
+// you is worse than the form it replaced.
+
+function setSegmented(id, value) {
+  const box = document.getElementById(id);
+  if (!box || !value) return;
+  box.querySelectorAll("button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.value === value));
+  });
+}
+
+function applyIntent(data) {
+  // "un giro tranquillo" says nothing about the sport, and a 10 km run is not
+  // a 10 km ride. Rather than stopping to ask, carry the person's usual
+  // choice and label it as a guess they can correct in one tap.
+  // Once the chip has been tapped the choice is the person's, not a guess, and
+  // re-reading the same silent sentence must not undo that.
+  state.assumedSport = !data.sport && !state.sportChosen;
+  if (data.sport) {
+    state.sport = data.sport;
+    state.sportChosen = false;
+    remember("doiamo_sport", data.sport);
+  }
+  setSegmented("sport", state.sport);
+  if (data.surface) { state.surface = data.surface; setSegmented("surface", data.surface); }
+  if (data.sights) { state.sights = data.sights; setSegmented("sights", data.sights); }
+
+  if (data.start) setPoint("start", data.start.lat, data.start.lon, data.start.label, false);
+  if (data.end) setPoint("end", data.end.lat, data.end.lon, data.end.label, false);
+
+  // No destination named means a loop — "voglio correre 10 km" is a loop from
+  // wherever you are, not half a journey to nowhere.
+  state.mode = data.end ? "route" : "loop";
+  document.getElementById("loopMode").checked = state.mode === "loop";
+  applyMode();
+
+  if (data.distance_km) {
+    setDistance(Math.round(data.distance_km));
+    state.distanceAny = false;
+    document.getElementById("distanceAny").checked = false;
+    syncDistanceEnabled();
+  }
+  if (data.elevation_gain_m !== null && data.elevation_gain_m !== undefined) {
+    state.gainM = Math.round(data.elevation_gain_m);
+    const gain = document.getElementById("gain");
+    gain.value = state.gainM;
+    document.getElementById("gainValue").textContent = state.gainM;
+    paintSlider(gain);
+    state.gainAny = false;
+    document.getElementById("gainAny").checked = false;
+    gain.disabled = false;
+  }
+}
+
+function addChip(text, missing) {
+  const box = document.getElementById("askChips");
+  box.hidden = false;
+  const chip = document.createElement("span");
+  if (missing) chip.className = "miss";
+  chip.textContent = text;
+  box.appendChild(chip);
+}
+
+function addGuessChip(text, onFlip) {
+  const box = document.getElementById("askChips");
+  box.hidden = false;
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "guess";
+  chip.title = t("tapToChange");
+  chip.innerHTML = "";
+  chip.append(text);
+  const why = document.createElement("span");
+  why.className = "why";
+  why.textContent = t("assumed");
+  chip.appendChild(why);
+  chip.addEventListener("click", onFlip);
+  box.appendChild(chip);
+}
+
+function showChips(data) {
+  const box = document.getElementById("askChips");
+  box.innerHTML = "";
+  const items = (data.understood || []).slice();
+  (data.unresolved || []).forEach((name) => items.push({ miss: t("askUnresolved") + " " + name }));
+  if (!items.length) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  items.forEach((item) => {
+    if (typeof item === "string") addChip(item);
+    else addChip(item.miss, true);
+  });
+}
+
+async function askSearch() {
+  const field = document.getElementById("ask");
+  const sentence = field.value.trim();
+  if (!sentence) {
+    message(t("askEmpty"), "warn", true);
+    field.focus();
+    return;
+  }
+
+  const button = document.getElementById("askGo");
+  button.disabled = true;
+  button.textContent = t("searching");
+  message("");
+  try {
+    const centre = (state.view === "home" && heroMap ? heroMap : map).getCenter();
+    const response = await fetch("/api/interpret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sentence: sentence,
+        lang: getLang(),
+        lat: centre.lat,
+        lon: centre.lng,
+      }),
+    });
+    if (!response.ok) {
+      message(t("error"), "warn", true);
+      return;
+    }
+    const data = await response.json();
+    applyIntent(data);
+    showChips(data);
+    if (state.assumedSport) {
+      addGuessChip(t(state.sport), () => {
+        state.sport = state.sport === "running" ? "cycling" : "running";
+        // Tapping the chip is the choice the sentence never made, so from here
+        // on it is a fact and stops being drawn as a guess.
+        state.assumedSport = false;
+        state.sportChosen = true;
+        remember("doiamo_sport", state.sport);
+        setSegmented("sport", state.sport);
+        askSearch();
+      });
+    }
+
+    // A sentence that names no place still means "from here". Fall back to
+    // what the map is showing and say so, rather than refusing to search.
+    if (!state.start) {
+      const centre = (heroMap || map).getCenter();
+      setPoint("start", centre.lat, centre.lng, t("fromHere"), false);
+      addChip(t("fromHere"));
+    }
+    await search();
+  } catch (err) {
+    message(t("error"), "warn", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = t("askGo");
+  }
+}
+
+function revealForm(show) {
+  const slot = document.getElementById("heroSlot");
+  slot.hidden = !show;
+  const toggle = document.getElementById("toggleForm");
+  // The label lives in a span so the chevron pseudo-element sits beside the
+  // text rather than inheriting its underline.
+  toggle.innerHTML = "";
+  const label = document.createElement("span");
+  label.textContent = show ? t("hideClassic") : t("tryClassic");
+  toggle.appendChild(label);
+  toggle.setAttribute("aria-expanded", show ? "true" : "false");
 }
 
 // ---------------------------------------------------------------- search
@@ -1134,6 +1322,7 @@ async function search() {
     const notes = [];
     if (notices.includes("no_exact_distance_match")) notes.push(t("noExactDistance"));
     if (notices.includes("alternatives_unavailable")) notes.push(t("altsUnavailable"));
+    if (notices.includes("busy_roads_only")) notes.push(t("busyRoadsOnly"));
     message(notes.join(" "), notes.length ? "warn" : "");
 
     renderContext();
@@ -1158,6 +1347,9 @@ function applyLang() {
   document.querySelectorAll("#lang button").forEach((b) => {
     b.setAttribute("aria-pressed", String(b.dataset.lang === getLang()));
   });
+  document.getElementById("ask").placeholder = t("askPlaceholder");
+  document.getElementById("askGo").textContent = t("askGo");
+  revealForm(!document.getElementById("heroSlot").hidden);
   document.getElementById("startInput").placeholder = t("startPlaceholder");
   document.getElementById("endInput").placeholder = t("endPlaceholder");
   document.getElementById("locate").title = t("locate");
@@ -1175,6 +1367,7 @@ function wireEverything() {
   wireSegmented("surface", "surface");
   wireSegmented("sights", "sights");
   wireSegmented("sport", "sport", () => {
+    remember("doiamo_sport", state.sport);
     // A cyclist asking for 10 km is not asking for the same ride a runner is.
     const distance = document.getElementById("distance");
     distance.max = state.sport === "cycling" ? 120 : 60;
@@ -1229,6 +1422,17 @@ function wireEverything() {
   });
 
   document.getElementById("search").addEventListener("click", search);
+  document.getElementById("askGo").addEventListener("click", askSearch);
+  document.getElementById("ask").addEventListener("keydown", (e) => {
+    // Enter searches; Shift+Enter is a newline.
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      askSearch();
+    }
+  });
+  document.getElementById("toggleForm").addEventListener("click", () => {
+    revealForm(document.getElementById("heroSlot").hidden);
+  });
   document.getElementById("newSearch").addEventListener("click", showHome);
   document.getElementById("mapClose").addEventListener("click", closeMap);
   document.getElementById("editSearch").addEventListener("click", () => {

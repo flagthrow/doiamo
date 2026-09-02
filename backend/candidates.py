@@ -55,6 +55,15 @@ def _weighted_share(distances: Dict[int, float], table: Dict[int, float]) -> flo
     return acc / total
 
 
+def _share_of(distances: Dict[int, float], keys: Sequence[int]) -> float:
+    """Plain share of the route's length spent on the given waytypes — unlike
+    the exposure score this is a fraction of metres, so it can carry a ceiling."""
+    total = sum(distances.values())
+    if total <= 0:
+        return 0.0
+    return sum(distances.get(key, 0.0) for key in keys) / total
+
+
 def _breakdown(
     distances: Dict[int, float], labels: Dict[int, str]
 ) -> List[SurfaceBreakdown]:
@@ -155,7 +164,8 @@ class _Measured:
 
     __slots__ = (
         "raw", "coords", "distance_m", "ascent_m", "descent_m", "paved_share",
-        "traffic_exposure", "headwind_share", "step_distance_m", "air", "cells",
+        "traffic_exposure", "big_road_share", "headwind_share", "step_distance_m",
+        "air", "cells",
     )
 
     def __init__(self, raw: RawRoute, weather: WeatherContext) -> None:
@@ -171,6 +181,7 @@ class _Measured:
 
         self.paved_share = _weighted_share(raw.surface, config.SURFACE_PAVEDNESS)
         self.traffic_exposure = _weighted_share(raw.waytype, config.WAYTYPE_EXPOSURE)
+        self.big_road_share = _share_of(raw.waytype, config.BIG_ROAD_WAYTYPES)
         self.step_distance_m = raw.waytype.get(config.STEPS_WAYTYPE, 0.0)
         self.headwind_share = geo.headwind_exposure(
             self.coords,
@@ -270,6 +281,16 @@ def rank(
         else:
             notices.append("no_exact_distance_match")
 
+    # Drop the candidates that spend too much of their length beside fast
+    # traffic — but only while a calmer sibling survives. In a place where every
+    # way out is a state road, an unlabelled empty page helps nobody; the route
+    # is kept and the badge says what it is.
+    calm = [m for m in measured if m.big_road_share <= config.BIG_ROAD_REJECT_SHARE]
+    if calm and len(calm) < len(measured):
+        measured = calm
+    elif not calm:
+        notices.append("busy_roads_only")
+
     # Air only earns a weight when it actually varies between these routes.
     use_air = air_context.differentiates_routes
     aqi_values = [
@@ -363,6 +384,7 @@ def rank(
                 scores=scores,
                 paved_share=round(item.paved_share, 4),
                 traffic_exposure=round(item.traffic_exposure, 4),
+                big_road_share=round(item.big_road_share, 4),
                 headwind_share=round(item.headwind_share, 4),
                 step_distance_m=round(item.step_distance_m, 1),
                 surface_breakdown=_breakdown(item.raw.surface, config.SURFACE_LABELS),
