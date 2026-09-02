@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import candidates, config, geo, health, poi
+from . import candidates, config, geo, health, intent as intent_reader, poi
 from .geocoding import PhotonGeocoder
 from . import poi_store as poi_store_module
 from .poi_store import LocalPoiStore, ensure_downloaded
@@ -26,6 +26,8 @@ from .cache import TTLCache
 from .gpx import build_gpx, filename_for
 from .models import (
     GeocodeResult,
+    InterpretRequest,
+    InterpretResponse,
     Poi,
     PoiRequest,
     PoiResponse,
@@ -122,6 +124,8 @@ async def healthz() -> Dict[str, object]:
             "url_configured": bool(poi_store_module.DOWNLOAD_URL),
             "download": poi_store_module.LAST_DOWNLOAD,
         },
+        "intent_model": dict(intent_reader.spend(),
+                             cache=intent_reader.cache_stats()),
         "routing_budget": app.state.engine.budget.status()
         if hasattr(app.state.engine, "budget") else None,
     }
@@ -295,6 +299,63 @@ async def pois(request: PoiRequest) -> PoiResponse:
         available=ok,
         source=source,
     )
+
+
+@app.post("/api/interpret", response_model=InterpretResponse)
+async def interpret(request: InterpretRequest) -> InterpretResponse:
+    """Turn a sentence into a search.
+
+    Rules first — free, instant, and enough for most sentences. Claude only
+    when they came back with nothing to act on, and only to fill the gaps.
+    """
+    # Count the call rather than diffing the answer: a model call that agreed
+    # with the rules costs exactly as much as one that did not, and reporting it
+    # as "the rules handled this" hides both the spend and the failures.
+    calls_before = intent_reader.USAGE["calls"]
+    parsed = intent_reader.interpret(request.sentence)
+    used_model = intent_reader.USAGE["calls"] > calls_before
+
+    near = (request.lat, request.lon) if request.lat is not None else None
+    resolved: Dict[str, Optional[GeocodeResult]] = {"start": None, "end": None}
+    unresolved: List[str] = []
+    for field, text in (("start", parsed.start_text), ("end", parsed.end_text)):
+        if not text:
+            continue
+        try:
+            hits = await app.state.geocoder.search(text, near=near)
+        except Exception:
+            hits = []
+        if hits:
+            resolved[field] = GeocodeResult(**hits[0])
+        else:
+            unresolved.append(text)
+
+    return InterpretResponse(
+        understood=intent_reader.summarise(parsed, request.lang),
+        sport=parsed.sport,
+        mode=parsed.mode,
+        distance_km=parsed.distance_km,
+        elevation_gain_m=parsed.elevation_gain_m,
+        surface=parsed.surface,
+        sights=parsed.sights,
+        start=resolved["start"],
+        end=resolved["end"],
+        unresolved=unresolved,
+        used_model=used_model,
+    )
+
+
+@app.get("/api/intent-gaps")
+async def intent_gaps(limit: int = 50) -> Dict[str, object]:
+    """Sentences the rules could not read, most-asked first.
+
+    The work list: teach the parser one of these and it never costs a model
+    call again. This is how the LLM bill goes down over time rather than up.
+    """
+    return {
+        "gaps": intent_reader.STORE.gaps(limit),
+        "store": intent_reader.STORE.stats(),
+    }
 
 
 @app.get("/api/geocode", response_model=List[GeocodeResult])

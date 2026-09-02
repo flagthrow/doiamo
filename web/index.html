@@ -43,7 +43,15 @@
       <div class="hero-inner">
         <h2 class="headline" data-i18n="headline"></h2>
         <p class="hero-sub" data-i18n="tagline"></p>
-        <div class="hero-slot" id="heroSlot"></div>
+        <div class="ask">
+          <textarea id="ask" rows="2" spellcheck="false"></textarea>
+          <div class="ask-row">
+            <button class="primary" id="askGo"></button>
+          </div>
+          <div class="chips" id="askChips" hidden></div>
+          <button class="link-btn ask-toggle" id="toggleForm" type="button" aria-expanded="false"></button>
+        </div>
+        <div class="hero-slot" id="heroSlot" hidden></div>
         <p class="hero-note" data-i18n="heroNote"></p>
       </div>
     </section>
