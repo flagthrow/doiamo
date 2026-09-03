@@ -662,7 +662,8 @@ function renderSummary() {
     state.mode === "loop" ? t("modeLoop") : t("modeRoute"),
     t(state.sport),
     state.mode === "loop" || !state.distanceAny ? state.distanceKm + " km" : null,
-    state.area === "urban" ? t("areaUrban") : null,
+    state.area === "centre" ? t("areaCentre")
+      : state.area === "urban" ? t("areaUrban") : null,
     t(state.surface),
   ].filter(Boolean).join(" · ");
 
@@ -908,6 +909,8 @@ function describeRoute(route) {
 
   let extra = null;
   if ((route.big_road_share || 0) >= 0.15) extra = t("sumBusy");
+  else if (state.area === "centre" && (route.centre_share || 0) >= 0.6)
+    extra = t("sumCentre");
   else if ((route.bikeway_share || 0) >= 0.4) extra = t("sumBikeway");
   else if (perKmWater >= 0.5) extra = t("sumWater");
   else if (km > 0 && sights / km >= 2) extra = t("sumSights");
@@ -1537,6 +1540,7 @@ async function search() {
     if (notices.includes("no_exact_distance_match")) notes.push(t("noExactDistance"));
     if (notices.includes("alternatives_unavailable")) notes.push(t("altsUnavailable"));
     if (notices.includes("busy_roads_only")) notes.push(t("busyRoadsOnly"));
+    if (notices.includes("centre_unknown")) notes.push(t("centreUnknown"));
     if (notices.includes("gain_target_unreachable")) notes.push(t("noFlatOption"));
     // Only one of these two: the second is the same news with a better answer
     // attached, and printing both says it twice.

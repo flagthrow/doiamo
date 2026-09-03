@@ -24,6 +24,9 @@ from .routing.base import RawRoute
 # Points sampled per route for the air-quality lookup.
 AIR_SAMPLES_PER_ROUTE = 5
 
+# Enough to tell a loop that stays in the middle from one that leaves it.
+CENTRE_SAMPLES = 40
+
 # A candidate this far off the requested distance is not what was asked for.
 DISTANCE_REJECT_RATIO = 0.35
 
@@ -285,12 +288,31 @@ def merge_stretched(
     return ([kept[0], best] + kept[1:])[:limit], True
 
 
+def _centre_share(
+    coords: Sequence[Sequence[float]], centre: Optional[Dict[str, object]]
+) -> float:
+    """How much of the route is inside the middle of town, 0..1."""
+    if not centre or not coords:
+        return 0.0
+    lat0, lon0 = float(centre["lat"]), float(centre["lon"])
+    radius = float(centre["radius_m"])
+    points = geo.sample_points(coords, CENTRE_SAMPLES)
+    if not points:
+        return 0.0
+    inside = sum(
+        1 for lat, lon in points
+        if geo.haversine_m(lon, lat, lon0, lat0) <= radius
+    )
+    return inside / len(points)
+
+
 def rank(
     raw_routes: Sequence[RawRoute],
     request: SearchRequest,
     weather: WeatherContext,
     air_by_cell: Dict[Tuple[float, float], Dict[str, float]],
     limit: int = config.MAX_RESULTS,
+    centre: Optional[Dict[str, object]] = None,
 ) -> Tuple[List[RouteCandidate], AirContext, List[str]]:
     """Measure, filter, score and sort the candidates. Never returns nothing
     when the router returned something: a loose match beats an empty page."""
@@ -351,7 +373,19 @@ def rank(
     weights = dict(
         (config.WEIGHTS if request.is_loop else config.ROUTE_WEIGHTS)[request.sport]
     )
-    if request.area == "urban":
+    if request.area == "centre" and not centre:
+        # Nowhere to measure from. Falling back to the built-up proxy keeps
+        # some of the wish rather than quietly discarding all of it.
+        share = config.URBAN_WEIGHT
+        for name in weights:
+            weights[name] *= 1.0 - share
+        weights["urban"] = share
+    elif request.area == "centre" and centre:
+        share = config.CENTRE_WEIGHT
+        for name in weights:
+            weights[name] *= 1.0 - share
+        weights["centre"] = share
+    elif request.area == "urban":
         # Taken from the other axes rather than added on top, so the weights
         # still sum to one and the totals stay comparable across searches.
         share = config.URBAN_WEIGHT
@@ -402,6 +436,8 @@ def rank(
             "traffic": 1.0 - item.traffic_exposure,
             "wind": 1.0 - item.headwind_share,
         }
+        if "centre" in weights:
+            parts["centre"] = _centre_share(item.coords, centre)
         if "bikeway" in weights:
             parts["bikeway"] = item.bikeway_share
         if "urban" in weights:
@@ -507,6 +543,7 @@ def rank(
                 big_road_share=round(item.big_road_share, 4),
                 urban_share=round(item.urban_share, 4),
                 bikeway_share=round(item.bikeway_share, 4),
+                centre_share=round(_centre_share(item.coords, centre), 4),
                 best_for=tags.get(position, []),
                 calories_kcal=round(energy.kcal_for_route(
                     item.coords, request.sport, request.mass_kg,

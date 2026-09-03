@@ -269,3 +269,94 @@ def test_a_read_only_directory_is_reported_not_swallowed(tmp_path, monkeypatch):
     finally:
         os.chmod(locked, 0o700)
         importlib.reload(store)
+
+
+# --- finding the middle of town --------------------------------------------
+
+def _with_places(tmp_path, rows):
+    path = str(tmp_path / "places.sqlite")
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE places (id TEXT PRIMARY KEY, kind TEXT, name TEXT,
+                             lat REAL, lon REAL);
+        CREATE VIRTUAL TABLE place_bbox USING rtree(
+            rowid, min_lat, max_lat, min_lon, max_lon);
+        CREATE TABLE coverage (source TEXT, min_lat REAL, min_lon REAL,
+                               max_lat REAL, max_lon REAL, built_at TEXT,
+                               count INTEGER);
+        CREATE TABLE coverage_cells (cell_lat INTEGER, cell_lon INTEGER);
+        """
+    )
+    connection.executemany("INSERT INTO places VALUES (?,?,?,?,?)", rows)
+    connection.execute(
+        "INSERT INTO place_bbox SELECT p.rowid, p.lat, p.lat, p.lon, p.lon FROM places p"
+    )
+    connection.commit()
+    connection.close()
+    return LocalPoiStore(path)
+
+
+def test_a_database_without_places_loses_the_feature_not_the_search(tmp_path):
+    """A deployment still serving last week's asset must degrade quietly."""
+    path = str(tmp_path / "old.sqlite")
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE pois (id TEXT PRIMARY KEY, kind TEXT, name TEXT,
+                           lat REAL, lon REAL);
+        CREATE TABLE coverage (source TEXT, min_lat REAL, min_lon REAL,
+                               max_lat REAL, max_lon REAL, built_at TEXT,
+                               count INTEGER);
+        CREATE TABLE coverage_cells (cell_lat INTEGER, cell_lon INTEGER);
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    assert LocalPoiStore(path).nearest_place(45.4642, 9.19) is None
+
+
+def test_the_nearest_centre_is_found(tmp_path):
+    store = _with_places(tmp_path, [
+        ("node/1", "city", "Milano", 45.4642, 9.1900),
+        ("node/2", "city", "Torino", 45.0703, 7.6869),
+    ])
+
+    found = store.nearest_place(45.47, 9.20)
+
+    assert found["name"] == "Milano"
+    assert found["radius_m"] == 2500
+
+
+def test_a_named_centro_storico_beats_the_city_node(tmp_path):
+    """Standing inside one, it is the thing people mean by "in centro" — even
+    though the city node sits a little closer."""
+    store = _with_places(tmp_path, [
+        ("node/1", "city", "Bologna", 44.4949, 11.3426),
+        ("node/2", "historic", "Centro Storico", 44.4940, 11.3450),
+    ])
+
+    found = store.nearest_place(44.4949, 11.3426)
+
+    assert found["kind"] == "historic"
+    assert found["radius_m"] < 2500
+
+
+def test_a_centro_storico_in_another_town_does_not_win(tmp_path):
+    """Ranking historic nodes above city nodes outright answered "Milano
+    Duomo" with a centro storico five kilometres away in Cantalupa. Rank only
+    settles a tie between nodes describing the same place."""
+    store = _with_places(tmp_path, [
+        ("node/1", "city", "Milano", 45.4642, 9.1900),
+        ("node/2", "historic", "Cantalupa Centro Storico", 45.5100, 9.1600),
+    ])
+
+    found = store.nearest_place(45.4642, 9.1900)
+
+    assert found["name"] == "Milano"
+
+
+def test_a_centre_on_the_other_side_of_the_country_is_not_your_centre(tmp_path):
+    store = _with_places(tmp_path, [("node/1", "city", "Milano", 45.4642, 9.19)])
+    assert store.nearest_place(41.9028, 12.4964) is None

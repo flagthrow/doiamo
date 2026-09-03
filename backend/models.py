@@ -90,6 +90,9 @@ class RouteCandidate(BaseModel):
     urban_share: float = 0.0
     # Share of the route on separated bike infrastructure.
     bikeway_share: float = 0.0
+    # Share of the route inside the middle of the nearest town, 0 when we have
+    # no idea where that is.
+    centre_share: float = 0.0
     # An estimate, and the body mass behind it is the biggest unknown in it.
     calories_kcal: float = 0.0
     # Which part of an unsatisfiable request this route is the best answer to:

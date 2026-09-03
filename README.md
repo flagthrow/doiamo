@@ -219,6 +219,26 @@ POIs are queried as `nwr`, not `node`: a park, a palazzo or a large monument is
 a way or a relation in OSM, and asking only for nodes drops about a third of
 everything worth seeing.
 
+### Where the middle of town is
+
+The same build also records **places** — `place=city|town|village` nodes, plus
+`suburb`/`quarter` nodes named as a centro storico — in their own table, so
+"in centro" can mean something sharper than "on a residential street". A viale
+on the ring road is thoroughly urban and nowhere near the middle, which is why
+`area=urban` could not stand in for `area=centre`.
+
+How far out "the centre" reaches scales with the place, because 2.5 km from
+the Duomo is still central Milan while 2.5 km from the middle of a village is
+the next village: 2500 m for a city, 1200 m for a town, 600 m for a village,
+1400 m for a named historic centre. A named centro storico outranks the city
+node even when the city node is closer — it is the thing people mean.
+
+Places are kept out of the `pois` table on purpose. Counted as points of
+interest, every urban route would report a monument it does not pass. A
+database built before this table existed loses the feature and nothing else:
+`nearest_place()` returns `None`, and `area=centre` falls back to the built-up
+proxy rather than discarding the request.
+
 ### POIs in the score
 
 They arrive after the routes are already on screen, so they **adjust** a score
@@ -463,6 +483,12 @@ locally, publish it, and point `POI_DB_URL` at it.
 
 The database is **derived from OpenStreetMap and therefore ODbL**, not MIT like
 the code. The release that hosts it says so and attributes OpenStreetMap.
+
+The `places` table arrived after the first published asset. A deployment still
+serving an older file keeps working and simply loses `area=centre`, which falls
+back to the built-up proxy and says so — so republishing is an improvement to
+schedule, not an outage to race. Rebuild, publish, and point `POI_DB_URL` at
+the new release.
 
 ## Licence and non-commercial use
 

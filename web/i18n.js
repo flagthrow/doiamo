@@ -144,6 +144,10 @@ const STRINGS = {
     retryAsk: "Hai trovato quello che cercavi?",
     tryAdvanced: "Prova la ricerca avanzata",
     areaUrban: "in citt\u00e0",
+    areaCentre: "in centro",
+    sumCentre: "quasi tutto in centro",
+    centreUnknown:
+      "Non sappiamo dove sia il centro da queste parti, quindi abbiamo cercato in citt\u00e0.",
     showDetails: "Dettagli",
     hideDetails: "Nascondi dettagli",
     headwindShort: "controvento",
@@ -329,6 +333,10 @@ const STRINGS = {
     retryAsk: "Did you find what you were looking for?",
     tryAdvanced: "Try the advanced search",
     areaUrban: "in town",
+    areaCentre: "in the centre",
+    sumCentre: "almost entirely in the centre",
+    centreUnknown:
+      "We do not know where the centre is around here, so we searched the built-up area instead.",
     showDetails: "Details",
     hideDetails: "Hide details",
     headwindShort: "headwind",

@@ -524,3 +524,36 @@ def test_a_bare_route_still_loses_to_one_full_of_them():
 
     assert scores["rich"]["sights"] == 1.0
     assert scores["bare"]["sights"] == 0.0
+
+
+# --- where the middle of a place is ----------------------------------------
+
+@pytest.mark.parametrize("tags,expected", [
+    ({"place": "city", "name": "Milano"}, "city"),
+    ({"place": "town", "name": "Monza"}, "town"),
+    ({"place": "village", "name": "Pino"}, "village"),
+    ({"place": "suburb", "name": "Centro Storico"}, "historic"),
+    ({"place": "quarter", "name": "Centro"}, "historic"),
+    ({"place": "suburb", "name": "Old Town"}, "historic"),
+    ({"place": "suburb", "name": "Navigli"}, None),
+    ({"place": "suburb"}, None),
+    ({"amenity": "drinking_water"}, None),
+])
+def test_a_centre_is_recognised_without_swallowing_every_district(tags, expected):
+    assert poi.classify_place(tags) == expected
+
+
+def test_a_centre_is_never_counted_as_a_point_of_interest():
+    """Counted as one, every urban route would report a monument it does not
+    pass — and the two are stored in different tables for the same reason."""
+    for tags in ({"place": "city", "name": "Milano"},
+                 {"place": "suburb", "name": "Centro Storico"}):
+        assert poi.classify(tags) is None
+
+
+def test_the_centre_of_a_village_is_smaller_than_the_centre_of_a_city():
+    """2.5 km from the Duomo is still central Milan; 2.5 km from the middle of
+    a village is the next village."""
+    radii = poi.PLACE_RADIUS_M
+    assert radii["village"] < radii["town"] < radii["city"]
+    assert poi.PLACE_RANKS["historic"] < poi.PLACE_RANKS["city"]

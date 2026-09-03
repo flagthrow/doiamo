@@ -202,8 +202,17 @@ async def search(request: SearchRequest) -> SearchResponse:
         query.lat, query.lon, cells, client=app.state.http
     )
 
+    # Where the middle of town is, when somebody asked to stay in it. Looked up
+    # once for the search rather than per route, and absent without complaint
+    # on a database built before places existed.
+    centre = None
+    if query.area == "centre":
+        centre = app.state.poi_store.nearest_place(query.lat, query.lon)
+        if centre is None:
+            notices.append("centre_unknown")
+
     routes, air_context, rank_notices = candidates.rank(
-        raw_routes, query, weather, air_by_cell
+        raw_routes, query, weather, air_by_cell, centre=centre
     )
     notices.extend(rank_notices)
 

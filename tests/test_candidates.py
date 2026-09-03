@@ -474,3 +474,44 @@ def test_bike_lanes_count_for_both_sports_and_more_on_wheels():
         assert table["cycling"]["bikeway"] > table["running"]["bikeway"] > 0
         for sport in ("running", "cycling"):
             assert round(sum(table[sport].values()), 6) == 1.0
+
+
+# --- staying in the middle of town -----------------------------------------
+
+CENTRE = {"kind": "city", "name": "Milano", "lat": 45.4642, "lon": 9.19,
+          "distance_m": 0.0, "radius_m": 2500}
+
+
+def test_asking_for_the_centre_prefers_the_route_that_stays_in_it():
+    """A viale on the ring road is thoroughly urban and nowhere near the
+    middle, which is why "in citta" could not stand in for "in centro"."""
+    middle = make_route(center_lat=45.4642, center_lon=9.19, radius_deg=0.008)
+    ring = make_route(center_lat=45.5100, center_lon=9.26, radius_deg=0.008)
+
+    ranked, _, _ = candidates.rank(
+        [middle, ring], request(area="centre"), CALM, {}, centre=CENTRE
+    )
+
+    assert ranked[0].centre_share > ranked[1].centre_share
+    assert ranked[0].centre_share > 0.9
+    assert ranked[1].centre_share == 0.0
+
+
+def test_without_a_known_centre_the_wish_is_not_silently_dropped():
+    """Nowhere to measure from, so it falls back to the built-up proxy rather
+    than discarding the constraint and ranking as though nothing was asked."""
+    streets = make_route(waytype={3: 8000.0, 7: 2000.0})
+    tracks = make_route(waytype={5: 7000.0, 2: 3000.0}, center_lon=9.26)
+
+    ranked, _, _ = candidates.rank(
+        [streets, tracks], request(area="centre"), CALM, {}, centre=None
+    )
+
+    assert ranked[0].urban_share > ranked[1].urban_share
+
+
+def test_the_weights_still_sum_to_one_in_the_centre():
+    ranked, _, _ = candidates.rank(
+        [make_route()], request(area="centre"), CALM, {}, centre=CENTRE
+    )
+    assert 0.0 <= ranked[0].scores.total <= 1.0

@@ -29,7 +29,7 @@ from typing import Optional, Tuple
 
 import osmium
 
-from backend.poi import classify
+from backend.poi import classify, classify_place
 
 
 def _area_centre(area: "osmium.osm.Area") -> Optional[Tuple[float, float]]:
@@ -55,11 +55,13 @@ def _area_centre(area: "osmium.osm.Area") -> Optional[Tuple[float, float]]:
 
 
 class Collector(osmium.SimpleHandler):
-    def __init__(self, write) -> None:
+    def __init__(self, write, write_place) -> None:
         super().__init__()
         self._write = write
+        self._write_place = write_place
         self.nodes = 0
         self.areas = 0
+        self.places = 0
         self.bounds = [90.0, 180.0, -90.0, -180.0]   # min_lat, min_lon, max_lat, max_lon
 
     def _keep(self, identity: str, kind: str, tags, lat: float, lon: float) -> None:
@@ -71,8 +73,23 @@ class Collector(osmium.SimpleHandler):
         self.bounds[3] = max(self.bounds[3], lon)
 
     def node(self, n) -> None:
-        kind = classify(dict(n.tags))
-        if kind is None or not n.location.valid():
+        if not n.location.valid():
+            return
+        tags = dict(n.tags)
+
+        # A centre is not a point of interest and is kept apart from them:
+        # counted as one, every urban route would report a monument it does
+        # not pass.
+        place = classify_place(tags)
+        if place is not None:
+            self.places += 1
+            self._write_place(
+                "node/{}".format(n.id), place, tags.get("name"),
+                n.location.lat, n.location.lon,
+            )
+
+        kind = classify(tags)
+        if kind is None:
             return
         self.nodes += 1
         self._keep("node/{}".format(n.id), kind, n.tags, n.location.lat, n.location.lon)
@@ -100,6 +117,19 @@ CREATE TABLE IF NOT EXISTS pois (
     lon   REAL NOT NULL
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS poi_bbox USING rtree(
+    rowid, min_lat, max_lat, min_lon, max_lon
+);
+-- Where the middle of a place is, so "in centro" can mean something more than
+-- "on a residential street". Its own table: this is not a point of interest
+-- and must never be counted as one.
+CREATE TABLE IF NOT EXISTS places (
+    id    TEXT PRIMARY KEY,
+    kind  TEXT NOT NULL,
+    name  TEXT,
+    lat   REAL NOT NULL,
+    lon   REAL NOT NULL
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS place_bbox USING rtree(
     rowid, min_lat, max_lat, min_lon, max_lon
 );
 CREATE TABLE IF NOT EXISTS coverage (
@@ -132,6 +162,14 @@ def build(pbf_paths, db_path: str) -> None:
 
     rows = []
     seen = set()
+    places = []
+    seen_places = set()
+
+    def write_place(identity, kind, name, lat, lon):
+        if identity in seen_places:
+            return
+        seen_places.add(identity)
+        places.append((identity, kind, name, lat, lon))
 
     def write(identity, kind, name, lat, lon):
         # A place mapped as both a node and an area appears twice; the first
@@ -143,12 +181,13 @@ def build(pbf_paths, db_path: str) -> None:
 
     started = time.monotonic()
     for pbf_path in pbf_paths:
-        handler = Collector(write)
+        handler = Collector(write, write_place)
         before = len(rows)
         print("reading {} …".format(pbf_path), flush=True)
         handler.apply_file(pbf_path, locations=True, idx="flex_mem")
-        print("  {} nodes, {} areas, {} new rows".format(
-            handler.nodes, handler.areas, len(rows) - before), flush=True)
+        print("  {} nodes, {} areas, {} places, {} new rows".format(
+            handler.nodes, handler.areas, handler.places, len(rows) - before),
+            flush=True)
         # One coverage row per extract. Merging them into a single box would
         # claim the empty space between two distant regions.
         connection.execute(
@@ -162,6 +201,11 @@ def build(pbf_paths, db_path: str) -> None:
     connection.executemany("INSERT OR IGNORE INTO pois VALUES (?,?,?,?,?)", rows)
     connection.execute(
         "INSERT INTO poi_bbox SELECT p.rowid, p.lat, p.lat, p.lon, p.lon FROM pois p"
+    )
+    print("writing {} places …".format(len(places)), flush=True)
+    connection.executemany("INSERT OR IGNORE INTO places VALUES (?,?,?,?,?)", places)
+    connection.execute(
+        "INSERT INTO place_bbox SELECT p.rowid, p.lat, p.lat, p.lon, p.lon FROM places p"
     )
     build_coverage_cells(connection)
     connection.commit()

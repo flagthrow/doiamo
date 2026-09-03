@@ -10,9 +10,12 @@ app stays global while the launch cities stay fast.
 """
 from __future__ import annotations
 
+import math
 import os
 import sqlite3
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from . import poi as poi_module
 
 # Resolved against the project root, not the working directory. A relative
 # path here fails silently — the store reports "not available" and everything
@@ -31,6 +34,15 @@ DOWNLOAD_TIMEOUT_S = float(os.environ.get("POI_DB_TIMEOUT_S", "120"))
 # Verona and Parma, none of which are in it, and claiming them would return no
 # points of interest at all with nothing to say why.
 COVERAGE_CELL_DEG = 0.1
+
+
+def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Flat-earth distance. Only ever used over a few tens of kilometres, where
+    the error is far smaller than the question being asked."""
+    mean = math.radians((lat1 + lat2) / 2.0)
+    dx = (lon2 - lon1) * math.cos(mean) * 111_320.0
+    dy = (lat2 - lat1) * 110_570.0
+    return math.hypot(dx, dy)
 
 
 class LocalPoiStore:
@@ -93,6 +105,63 @@ class LocalPoiStore:
     @property
     def cells(self) -> int:
         return len(self._cells)
+
+    def nearest_place(
+        self, lat: float, lon: float, within_km: float = 25.0
+    ) -> Optional[Dict[str, object]]:
+        """The middle of the nearest settlement, or None.
+
+        Returns None rather than raising when the database predates this table:
+        a deployment running last week's asset should quietly lose the feature,
+        not every search. A named centro storico beats a city node at the same
+        distance, because it is the thing people actually mean by "in centro".
+        """
+        span = within_km / 111.0
+        lon_span = span / max(0.2, math.cos(math.radians(lat)))
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT p.kind, p.name, p.lat, p.lon
+                    FROM place_bbox b JOIN places p ON p.rowid = b.rowid
+                    WHERE b.min_lat >= ? AND b.max_lat <= ?
+                      AND b.min_lon >= ? AND b.max_lon <= ?
+                    """,
+                    (lat - span, lat + span, lon - lon_span, lon + lon_span),
+                ).fetchall()
+        except sqlite3.Error:
+            return None
+
+        found = []
+        for kind, name, plat, plon in rows:
+            metres = _distance_m(lat, lon, plat, plon)
+            found.append({
+                "kind": kind, "name": name, "lat": plat, "lon": plon,
+                "distance_m": metres,
+                "radius_m": poi_module.PLACE_RADIUS_M.get(kind, 1500),
+            })
+        if not found:
+            return None
+
+        # Distance decides. Rank only breaks a tie between nodes describing the
+        # same place: standing at the Duomo, the answer is Milan, not a centro
+        # storico five kilometres away in another town — which is exactly what
+        # ranking first produced.
+        found.sort(key=lambda place: place["distance_m"])
+        nearest = found[0]
+
+        # Unless you are actually standing inside a named historic centre, in
+        # which case that is the thing you meant by "in centro".
+        inside = [
+            place for place in found
+            if place["kind"] == "historic"
+            and place["distance_m"] <= place["radius_m"]
+        ]
+        if inside:
+            nearest = min(inside, key=lambda place: place["distance_m"])
+
+        # Too far away to be anybody's centre.
+        return nearest if nearest["distance_m"] <= within_km * 1000 else None
 
     def near(
         self, points: Sequence[Tuple[float, float]], radius_m: int

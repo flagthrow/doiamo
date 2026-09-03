@@ -93,6 +93,55 @@ KIND_BY_TAG: Dict[Tuple[str, str], str] = {
 KINDS = [name for name, _ in CATEGORIES]
 
 
+# --- where the middle of a place is ---------------------------------------
+# "In centro" is not "in town": a viale on the ring road is thoroughly urban
+# and nowhere near the middle. OSM marks the middle with a node, which is the
+# one shape of data this database already knows how to hold.
+#
+# The radius is how far out "the centre" reaches, and it has to scale with the
+# place: 2.5 km from the Duomo is still central Milan, while 2.5 km from the
+# middle of a village is the next village.
+PLACE_RANKS: Dict[str, int] = {"historic": 0, "city": 1, "town": 2, "village": 3}
+PLACE_RADIUS_M: Dict[str, int] = {
+    "historic": 1400,
+    "city": 2500,
+    "town": 1200,
+    "village": 600,
+}
+
+# A named centro storico is better than a city node, because it is the thing
+# people mean. Matched on the name because OSM has no single tag for it.
+HISTORIC_NAMES = (
+    "centro storico", "citta vecchia", "città vecchia", "borgo antico",
+    "old town", "city centre", "city center", "town centre", "town center",
+    "downtown", "altstadt", "vieille ville", "casco antiguo", "casco historico",
+)
+HISTORIC_PLACES = ("suburb", "quarter", "neighbourhood", "borough")
+
+
+def classify_place(tags: Dict[str, str]) -> Optional[str]:
+    """Which kind of centre this node marks, if any.
+
+    Kept apart from classify(): a city centre is not a point of interest and
+    must never be counted as one, or every urban route would report an extra
+    monument it does not pass.
+    """
+    place = tags.get("place")
+    if not place:
+        return None
+    if place in ("city", "town", "village"):
+        return place
+    if place in HISTORIC_PLACES:
+        name = (tags.get("name") or "").strip().lower()
+        if not name:
+            return None
+        if name in ("centro", "centre", "center") or any(
+            word in name for word in HISTORIC_NAMES
+        ):
+            return "historic"
+    return None
+
+
 def classify(tags: Dict[str, str]) -> Optional[str]:
     """Name the category an element belongs to, or None if we do not want it."""
     for (key, value), kind in KIND_BY_TAG.items():

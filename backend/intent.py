@@ -114,9 +114,18 @@ NOT_URBAN_PATTERNS = [
 ]
 URBAN_PATTERNS = [
     r"\b(?:rimanere|restare|resto|rimango|stare|sto)\s+(?:\S+\s+){0,2}?citt",
-    r"\bin\s+citt", r"\bin\s+centro\b", r"\bnon\s+uscire\s+dalla\s+citt",
+    r"\bin\s+citt", r"\bnon\s+uscire\s+dalla\s+citt",
     r"\bstay(?:ing)?\s+(?:\S+\s+){0,2}?(?:in|inside)\s+(?:the\s+)?(?:city|town)\b",
-    r"\bin\s+(?:the\s+)?(?:city|town)\b", r"\bdowntown\b", r"\burban\b",
+    r"\bin\s+(?:the\s+)?(?:city|town)\b", r"\burban\b",
+]
+
+# The middle of town, which is a sharper thing than the town. Tested before the
+# urban patterns, because "in centro citta" is both and the narrower one wins.
+CENTRE_PATTERNS = [
+    r"\bcentro\s+storico\b", r"\bin\s+centro\b", r"\bnel\s+centro\b",
+    r"\bper\s+il\s+centro\b", r"\bcentro\s+citt", r"\bcitta\s+vecchia\b",
+    r"\bdowntown\b", r"\bold\s+town\b", r"\bcity\s+cent(?:re|er)\b",
+    r"\btown\s+cent(?:re|er)\b", r"\bhistoric(?:al)?\s+cent(?:re|er)\b",
 ]
 
 # Rough pace, for turning "un'ora" into a distance.
@@ -293,11 +302,14 @@ def _fitness(text: str) -> str:
 
 
 def _area(text: str) -> Optional[str]:
-    """"urban" when they asked to stay in town, None when they said nothing —
-    and None, not "urban", when they asked for the opposite."""
+    """"centre", "urban", or None when they said nothing — and None, not
+    either of them, when they asked for the opposite."""
     for pattern in NOT_URBAN_PATTERNS:
         if re.search(pattern, text):
             return None
+    for pattern in CENTRE_PATTERNS:
+        if re.search(pattern, text):
+            return "centre"
     for pattern in URBAN_PATTERNS:
         if re.search(pattern, text):
             return "urban"
@@ -496,7 +508,9 @@ def summarise(intent: Intent, language: str = "it") -> List[str]:
         # What they asked for. The kilometres below are our arithmetic, not
         # their request, and showing only those would hide the substitution.
         out.append("{:.0f} kcal".format(intent.calories))
-    if intent.area == "urban":
+    if intent.area == "centre":
+        out.append("in centro" if it else "in the centre")
+    elif intent.area == "urban":
         out.append("in citta" if it else "in town")
     if intent.surface:
         labels = {"asphalt": ("asfalto", "asphalt"), "mixed": ("misto", "mixed"),
@@ -580,9 +594,10 @@ A number they gave always beats the table, and so does an explicit request \
 about hills.
 surface: "asphalt" for roads and cities, "trail" for dirt and paths, "mixed"
 sights: "monuments" for historic things, "nature" for parks and greenery
-area: "urban" only if they ask to stay in town or in the centre. This is about \
-where the route goes, not what it is paved with. Leave it null if they say \
-nothing, and null — never "urban" — if they want to get out of town.
+area: "centre" if they ask for the middle of town, the centro storico or \
+downtown; "urban" if they ask to stay in town generally. This is about where \
+the route goes, not what it is paved with. Leave it null if they say nothing, \
+and null — never either value — if they want to get out of town.
 start_text: the place they set off from, as written. Only a name you could
 find on a map — a town, a district, a named park, a street, a landmark. Never a
 description of where they want to be, like "fuori citta", "out of town", "in

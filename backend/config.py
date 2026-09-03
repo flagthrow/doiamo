@@ -133,7 +133,10 @@ RURAL_WAYTYPES = (1, 2, 5)      # state road, road, track
 # less on foot than on a bike only because a runner has more say over surface.
 BIKEWAY_WAYTYPES = (6,)         # cycleway
 
-AREAS: List[str] = ["any", "urban"]
+# "any", "urban" (anywhere built-up) or "centre" (the middle of the town).
+# They are different requests: a viale on the ring road is thoroughly urban and
+# nowhere near the middle, which is why one could not stand in for the other.
+AREAS: List[str] = ["any", "urban", "centre"]
 
 # Rough pace, used where no route timing exists yet — turning "un'ora" into a
 # distance, and estimating what a distance costs to cover.
@@ -143,6 +146,10 @@ KMH_CYCLING = 20.0
 # How much of the ranking "stay in town" takes over. Enough to reorder the
 # candidates, not so much that it outvotes the distance you asked for.
 URBAN_WEIGHT = float(os.environ.get("URBAN_WEIGHT", "0.22"))
+# Staying in the centre is a sharper request than staying in town, and worth
+# more of the ranking, because the alternative is a route that answers the
+# words and not the wish.
+CENTRE_WEIGHT = float(os.environ.get("CENTRE_WEIGHT", "0.28"))
 
 # Motorways never reach the scorer: they are absent from the foot and bike
 # graphs because pedestrians and bicycles are banned from them, so the router
