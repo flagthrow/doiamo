@@ -275,10 +275,13 @@ def test_monuments_and_nature_are_scored_separately():
     distances = {"stone": 10000.0, "trees": 10000.0}
     scores = poi.score(counts, distances, "running", "both")
 
+    # Absolute, not relative: forty monuments is plenty and scores full marks,
+    # while a single one is nearly nothing rather than exactly nothing — under
+    # the old ranking the lowest of any pair was forced to zero whatever it had.
     assert scores["stone"]["monuments"] == 1.0
     assert scores["stone"]["nature"] == 0.0
     assert scores["trees"]["nature"] == 1.0
-    assert scores["trees"]["monuments"] == 0.0
+    assert scores["trees"]["monuments"] < 0.1
 
 
 def test_a_preference_actually_separates_the_routes():
@@ -497,3 +500,27 @@ def test_assign_does_not_miss_points_east_or_west():
         missed, poi.MATCH_RADIUS_M
     )
 
+
+
+def test_plenty_of_monuments_is_plenty_and_stops_buying_rank():
+    """Both routes pass a fair number, so neither wins on sights and something
+    that actually differs — traffic, air — gets to decide."""
+    counts = {
+        "busy": {"monument": 60, "art": 20},
+        "quiet": {"monument": 30, "art": 10},
+    }
+    distances = {"busy": 10000.0, "quiet": 10000.0}
+
+    scores = poi.score(counts, distances, "running", "monuments")
+
+    assert scores["busy"]["sights"] == scores["quiet"]["sights"] == 1.0
+
+
+def test_a_bare_route_still_loses_to_one_full_of_them():
+    counts = {"rich": {"monument": 40}, "bare": {"monument": 0}}
+    distances = {"rich": 10000.0, "bare": 10000.0}
+
+    scores = poi.score(counts, distances, "running", "monuments")
+
+    assert scores["rich"]["sights"] == 1.0
+    assert scores["bare"]["sights"] == 0.0

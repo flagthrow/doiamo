@@ -181,18 +181,18 @@ ROUTE_WEIGHTS: Dict[str, Dict[str, float]] = {
 # stays in ROUTE_WEIGHTS, where going one way genuinely can be into the wind.
 WEIGHTS: Dict[str, Dict[str, float]] = {
     "running": {
-        "distance": 0.21,
-        "gain": 0.21,
-        "surface": 0.26,
-        "traffic": 0.21,
-        "air": 0.11,
+        "distance": 0.19,
+        "gain": 0.19,
+        "surface": 0.20,
+        "traffic": 0.27,
+        "air": 0.15,
     },
     "cycling": {
-        "distance": 0.20,
-        "gain": 0.20,
-        "surface": 0.20,
-        "traffic": 0.34,
-        "air": 0.06,
+        "distance": 0.18,
+        "gain": 0.18,
+        "surface": 0.16,
+        "traffic": 0.38,
+        "air": 0.10,
     },
 }
 
@@ -205,7 +205,7 @@ MODES: List[str] = ["loop", "route"]
 # versus greenery is not a quality axis at all — it is a destination axis, and
 # a runner heading for parks and one touring the centro storico want opposite
 # routes. Averaging them scores neither.
-POI_SHARE = 0.25
+POI_SHARE = 0.20
 
 # When the sights are not wanted, only water is left to adjust, and it should
 # not swing the ranking as far.
@@ -214,9 +214,16 @@ POI_SHARE_WATER_ONLY = 0.12
 # Split within the POI share. A cyclist carries bottles; a runner mostly does
 # not, so water matters more on foot and the view matters more on wheels.
 POI_WEIGHTS: Dict[str, Dict[str, float]] = {
-    "running": {"water": 0.50, "sights": 0.50},
-    "cycling": {"water": 0.35, "sights": 0.65},
+    "running": {"water": 0.62, "sights": 0.38},
+    "cycling": {"water": 0.45, "sights": 0.55},
 }
+
+# Sights saturate, and that is the whole point. Ranking them against each
+# other stretched the gap between forty monuments and sixty into a full zero-
+# to-one spread, so a route already thick with them could keep buying rank and
+# outvote breathing traffic for an hour. Past this density the answer is
+# "plenty" and the ranking moves on to things that still differ.
+SIGHTS_PER_KM_FULL = 2.0
 
 # One drinking fountain every this many kilometres counts as fully covered.
 WATER_INTERVAL_KM = 3.0

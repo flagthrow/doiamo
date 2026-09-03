@@ -388,8 +388,8 @@ def score(
             per_kind.get(kind, 0) for kind in config.NATURE_KINDS
         ) / km
 
-    monuments = _rank_within(monument_density)
-    nature = _rank_within(nature_density)
+    monuments = _saturating(monument_density)
+    nature = _saturating(nature_density)
 
     out: Dict[str, Dict[str, float]] = {}
     for route_id in counts:
@@ -419,15 +419,18 @@ def score(
     return out
 
 
-def _rank_within(density: Dict[str, float]) -> Dict[str, float]:
-    """Position each route against its siblings, 0..1."""
-    if not density:
-        return {}
-    low, high = min(density.values()), max(density.values())
-    if high <= low:
-        return {route_id: 1.0 for route_id in density}
+def _saturating(density: Dict[str, float]) -> Dict[str, float]:
+    """Score each route on an absolute scale that tops out, 0..1.
+
+    Ranking routes against each other made the best of any five score 1.0 by
+    construction, however little it had, and stretched the difference between
+    forty monuments and sixty across the whole range. Two routes that both pass
+    a fair number of them should tie here and let quiet air decide, which is
+    what an absolute ceiling gives.
+    """
     return {
-        route_id: (value - low) / (high - low) for route_id, value in density.items()
+        route_id: min(1.0, value / config.SIGHTS_PER_KM_FULL)
+        for route_id, value in density.items()
     }
 
 

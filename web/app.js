@@ -866,6 +866,33 @@ async function loadPois() {
 }
 
 // ---------------------------------------------------------------- results
+// One line saying what this route is like, in place of two numbers that are
+// already in the heading above it. Surface always, because it is the thing
+// that changes most between candidates, plus at most one other clause: the
+// bad news if there is any, otherwise the best thing about it. Two clauses is
+// a sentence someone reads; four is a spec sheet they skip.
+function describeRoute(route) {
+  const paved = route.paved_share;
+  let line = paved >= 0.85 ? t("sumPaved")
+           : paved >= 0.6 ? t("sumMostlyPaved")
+           : paved >= 0.35 ? t("sumMixed")
+           : t("sumUnpaved");
+
+  const counts = (state.poiCounts && state.poiCounts[route.id]) || {};
+  const km = route.distance_m / 1000;
+  const perKmWater = km > 0 ? (counts.water || 0) / km : 0;
+  const sights = (state.monumentKinds || []).concat(state.natureKinds || [])
+    .reduce((n, kind) => n + (counts[kind] || 0), 0);
+
+  let extra = null;
+  if ((route.big_road_share || 0) >= 0.15) extra = t("sumBusy");
+  else if (perKmWater >= 0.5) extra = t("sumWater");
+  else if (km > 0 && sights / km >= 2) extra = t("sumSights");
+  else if (route.traffic_exposure <= 0.2) extra = t("sumQuiet");
+
+  return extra ? line + ", " + extra : line;
+}
+
 function trafficLabel(exposure) {
   if (exposure < 0.25) return t("trafficLow");
   if (exposure < 0.5) return t("trafficMid");
@@ -978,8 +1005,6 @@ function renderResults() {
   }
 
   const query = lastPayload.query || {};
-  const hasDistanceTarget = query.distance_km !== null && query.distance_km !== undefined;
-  const hasGainTarget = query.elevation_gain_m !== null && query.elevation_gain_m !== undefined;
   const isLoop = query.mode !== "route";
 
   state.routes.forEach((route, index) => {
@@ -1003,9 +1028,7 @@ function renderResults() {
       ' km<span class="sep">·</span>+' + Math.round(route.ascent_m) + " m";
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent =
-      Math.round(route.paved_share * 100) + "% " + t("paved") + " · " +
-      trafficLabel(route.traffic_exposure);
+    sub.textContent = describeRoute(route);
     main.append(title, sub);
 
     head.append(rank, main, scoreRing(route.scores.total));
@@ -1014,27 +1037,10 @@ function renderResults() {
     bars.className = "bars";
     const query = lastPayload.query || {};
 
-    // Distance: against your target if you set one, otherwise how direct it is.
-    if (hasDistanceTarget) {
-      const offKm = route.distance_m / 1000 - query.distance_km;
-      bars.appendChild(bar(
-        t("scoreDistance"), route.scores.distance,
-        (offKm >= 0 ? "+" : "\u2212") + Math.abs(offKm).toFixed(1) + " km",
-        route.scores.distance <= 0.01
-      ));
-    } else {
-      bars.appendChild(bar(t("scoreDirectness"), route.scores.distance));
-    }
-
-    // Climb: the height itself, and marked when it is not what was asked for.
-    if (hasGainTarget || !isLoop) {
-      bars.appendChild(bar(
-        hasGainTarget ? t("scoreGain") : t("scoreGainFlat"),
-        route.scores.gain,
-        "+" + Math.round(route.ascent_m) + " m",
-        hasGainTarget && route.scores.gain <= 0.01
-      ));
-    }
+    // No distance or climb rows: the heading states both, and a bar that
+    // repeats the line above it is furniture. They still carry their weight in
+    // the score, and a route that misses a target you set still says so — in
+    // the notice above the results, where it cannot be missed.
 
     // Surface: the share of the route that is actually what you asked for.
     const paved = Math.round(route.paved_share * 100);
