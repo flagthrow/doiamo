@@ -253,6 +253,37 @@ def _mean(values: Optional[List[float]]) -> Optional[float]:
     return round(sum(values) / len(values), 2)
 
 
+def merge_stretched(
+    primary: List[RouteCandidate],
+    stretched: List[RouteCandidate],
+    limit: int = config.MAX_RESULTS,
+) -> Tuple[List[RouteCandidate], bool]:
+    """Offer the longer route that actually climbs, beside the one that keeps
+    the distance.
+
+    The two lists were ranked against different distance targets, so their
+    totals are not comparable and the stretched one is placed rather than
+    sorted in: second, where it will be seen, because a longer route nobody
+    scrolls to is the same as not offering it.
+    """
+    if not stretched or not primary:
+        return primary, False
+
+    best = max(stretched, key=lambda r: r.ascent_m)
+    reachable = max(r.ascent_m for r in primary)
+    if best.ascent_m < reachable * config.STRETCH_MIN_IMPROVEMENT:
+        # Further did not turn out to be hillier. Offering it anyway would be
+        # padding the page with a longer route for no reason.
+        return primary, False
+
+    kept = [
+        route.model_copy(update={"best_for": [t for t in route.best_for if t != "gain"]})
+        for route in primary
+    ]
+    best = best.model_copy(update={"best_for": ["gain"]})
+    return ([kept[0], best] + kept[1:])[:limit], True
+
+
 def rank(
     raw_routes: Sequence[RawRoute],
     request: SearchRequest,

@@ -132,7 +132,10 @@ class OfflineEngine(RoutingEngine):
                 _staircase(
                     _loop_outline(lat, lon, distance / STAIRCASE_STRETCH, i), lat
                 ),
-                rng.uniform(15, 90),
+                # Flat in town, hillier further out — the shape of a city on a
+                # plain with hills at its edge, so the "look further" path has
+                # something to find here too.
+                rng.uniform(15, 90) * (1.0 + 9.0 * max(0.0, length_m - 12000) / 20000),
             )
             routes.append(self._raw(coords, distance, i))
         return routes, []

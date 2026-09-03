@@ -259,6 +259,20 @@ DETOUR_VIA_COUNT = int(os.environ.get("DETOUR_VIA_COUNT", "8"))
 # the request is really just "the direct way".
 DETOUR_MIN_RATIO = 1.15
 
+# When the climb asked for cannot be had at the distance asked for, the ground
+# that has it is usually further out: Bologna's hills start about eight
+# kilometres from the centre, so a 10 km loop is stuck on the flat and a 20 km
+# one reaches the colli. Picking the least-flat of a flat batch is not an
+# answer to that — the honest alternative is a different search. It costs one
+# more round of routing, so it runs at fewer seeds and only when the request
+# was genuinely impossible.
+STRETCH_FACTOR = float(os.environ.get("STRETCH_FACTOR", "2.0"))
+STRETCH_MAX_KM = float(os.environ.get("STRETCH_MAX_KM", "80"))
+STRETCH_SEEDS = int(os.environ.get("STRETCH_SEEDS", "3"))
+# Not worth offering a longer route that barely climbs any more than the one
+# already on the page.
+STRETCH_MIN_IMPROVEMENT = 1.6
+
 ORS_PROFILES: Dict[str, Dict[str, str]] = {
     "running": {
         "asphalt": "foot-walking",

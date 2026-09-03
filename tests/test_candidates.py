@@ -400,3 +400,48 @@ def test_a_request_that_can_be_met_labels_nothing():
 
     assert all(r.best_for == [] for r in ranked)
     assert not [n for n in notices if "unreachable" in n]
+
+
+# --- looking further out when the hills are further out --------------------
+
+def test_a_longer_hillier_route_is_offered_beside_the_one_that_fits():
+    """Bologna's hills start further out than a 10 km loop can reach. Picking
+    the least-flat of a flat batch is not an answer; a different search is."""
+    primary = [r.model_copy(update={"best_for": ["distance", "gain"]})
+               for r in _ranked([_hilly(30.0, 10000.0, 9.19)])]
+    stretched = _ranked([_hilly(600.0, 20000.0, 9.30)], distance_km=20.0)
+
+    merged, offered = candidates.merge_stretched(primary, stretched)
+
+    assert offered is True
+    # Second, where it will actually be seen.
+    assert merged[1].ascent_m == max(r.ascent_m for r in stretched)
+    assert merged[1].best_for == ["gain"]
+    # The short one keeps the distance and stops claiming the climb.
+    assert merged[0].best_for == ["distance"]
+
+
+def test_a_longer_route_that_is_no_hillier_is_not_offered():
+    """Padding the page with a route twice as long for forty more metres of
+    climb answers nothing."""
+    primary = [r.model_copy(update={"best_for": ["distance", "gain"]})
+               for r in _ranked([_hilly(30.0, 10000.0, 9.19)])]
+    stretched = _ranked([_hilly(34.0, 20000.0, 9.30)], distance_km=20.0)
+
+    merged, offered = candidates.merge_stretched(primary, stretched)
+
+    assert offered is False
+    assert merged == primary
+
+
+def test_nothing_to_stretch_to_leaves_the_results_alone():
+    primary = _ranked([_hilly(30.0, 10000.0, 9.19)])
+    assert candidates.merge_stretched(primary, []) == (primary, False)
+
+
+def _ranked(routes, distance_km=10.0):
+    request = SearchRequest(
+        lat=45.4642, lon=9.19, sport="running", distance_km=distance_km,
+        elevation_gain_m=800.0, surface="asphalt", sights="both", mode="loop",
+    )
+    return candidates.rank(routes, request, CALM, {})[0]

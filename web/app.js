@@ -1530,7 +1530,10 @@ async function search() {
     if (notices.includes("alternatives_unavailable")) notes.push(t("altsUnavailable"));
     if (notices.includes("busy_roads_only")) notes.push(t("busyRoadsOnly"));
     if (notices.includes("gain_target_unreachable")) notes.push(t("noFlatOption"));
-    if (notices.includes("climb_target_unreachable")) notes.push(t("noClimbOption"));
+    // Only one of these two: the second is the same news with a better answer
+    // attached, and printing both says it twice.
+    if (notices.includes("stretched_alternative")) notes.push(t("climbFurtherOut"));
+    else if (notices.includes("climb_target_unreachable")) notes.push(t("noClimbOption"));
     if (notices.includes("distance_target_unreachable")) notes.push(t("noDistanceOption"));
     if (notices.includes("no_route_of_that_length")) notes.push(t("noRouteOfLength"));
     message(notes.join(" "), notes.length ? "warn" : "");

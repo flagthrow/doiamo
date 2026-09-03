@@ -153,6 +153,8 @@ const STRINGS = {
       "Nessun percorso vicino alla distanza che hai chiesto: sotto trovi i pi\u00f9 simili.",
     noClimbOption:
       "Qui intorno non c'\u00e8 abbastanza dislivello per quello che hai chiesto. Sotto sono segnati il percorso pi\u00f9 vicino alla distanza e quello che sale di pi\u00f9.",
+    climbFurtherOut:
+      "Non possiamo accontentarti del tutto: con questa distanza il dislivello che cerchi non c'\u00e8. Ti proponiamo il percorso pi\u00f9 vicino a quello che hai chiesto e, allungando, uno che sale davvero.",
     bestForDistance: "distanza giusta",
     bestForGain: "pi\u00f9 dislivello",
     noRouteOfLength:
@@ -333,6 +335,8 @@ const STRINGS = {
       "Nothing came out near the distance you asked for \u2014 these are the closest.",
     noClimbOption:
       "There is not that much climb around here. Marked below: the route closest to your distance, and the one that climbs most.",
+    climbFurtherOut:
+      "We cannot give you quite what you asked for: at this distance the climb is not there. Below are the route closest to your request and, if you go further, one that really climbs.",
     bestForDistance: "right distance",
     bestForGain: "most climb",
     noRouteOfLength:

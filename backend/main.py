@@ -207,6 +207,21 @@ async def search(request: SearchRequest) -> SearchResponse:
     )
     notices.extend(rank_notices)
 
+    # Nothing here climbs that much — but the hills may simply be further away
+    # than this loop can reach. Look once more, further out, before telling
+    # somebody their ride does not exist.
+    if "climb_target_unreachable" in rank_notices and query.is_loop:
+        stretched, stretched_query = await _stretched_alternative(
+            query, weather, air_by_cell
+        )
+        if stretched:
+            routes, offered = candidates.merge_stretched(routes, stretched)
+            if offered:
+                notices.append("stretched_alternative")
+                for route in routes:
+                    if "gain" in route.best_for:
+                        route_cache.set(route.id, (route, stretched_query.sport))
+
     for route in routes:
         route_cache.set(route.id, (route, query.sport))
 
@@ -220,6 +235,47 @@ async def search(request: SearchRequest) -> SearchResponse:
         candidates_returned=len(raw_routes),
         from_cache=from_cache,
     )
+
+
+async def _stretched_alternative(query, weather, air_by_cell):
+    """A second loop search at a longer distance, ranked on the same terms.
+
+    Kept deliberately cheap: fewer seeds, one attempt, and any failure — a
+    spent quota especially — returns nothing rather than taking the whole
+    search down with it. This is a bonus answer, not the answer.
+    """
+    asked_km = query.distance_km or 0.0
+    longer_km = min(asked_km * config.STRETCH_FACTOR, config.STRETCH_MAX_KM)
+    if longer_km <= asked_km * 1.2:
+        return [], query
+
+    stretched_query = query.model_copy(update={"distance_km": longer_km})
+    cache_key = _search_key(stretched_query)
+    cached = search_cache.get(cache_key)
+    if cached is not None:
+        raw_routes = cached[0]
+    else:
+        seeds = candidates.build_seeds(config.STRETCH_SEEDS)
+        try:
+            raw_routes, extra_notices = await app.state.engine.round_trips(
+                lat=query.lat,
+                lon=query.lon,
+                length_m=longer_km * 1000.0,
+                sport=query.sport,
+                surface=query.surface,
+                seeds=seeds,
+            )
+        except (RoutingError, HTTPException):
+            return [], query
+        search_cache.set(cache_key, (raw_routes, extra_notices, len(seeds)))
+
+    if not raw_routes:
+        return [], query
+
+    ranked, _, _ = candidates.rank(
+        raw_routes, stretched_query, weather, air_by_cell
+    )
+    return ranked, stretched_query
 
 
 @app.post("/api/pois", response_model=PoiResponse)

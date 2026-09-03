@@ -233,7 +233,12 @@ def test_a_different_start_is_a_different_search(client):
     far = client.post("/api/search", json=search_body(lat=45.50, lon=9.25)).json()
 
     assert far["from_cache"] is False
-    assert len(client.app.state.engine.calls) == calls + 1
+    # Counted by start rather than by total: a search whose climb target the
+    # ground cannot meet also looks once further out, which is a second call
+    # and not a second search.
+    started_far = [c for c in client.app.state.engine.calls if c[0] == 45.50]
+    assert started_far
+    assert len(client.app.state.engine.calls) > calls
 
 
 def test_nearby_starts_share_one_cache_entry(client):
@@ -256,7 +261,9 @@ def test_a_different_sport_or_surface_is_a_different_search(client):
     client.post("/api/search", json=search_body(sport="cycling", distance_km=30))
     client.post("/api/search", json=search_body(surface="trail"))
 
-    assert len(client.app.state.engine.calls) == calls + 2
+    later = client.app.state.engine.calls[calls:]
+    assert any(call[3] == "cycling" for call in later)
+    assert any(call[4] == "trail" for call in later)
 
 
 def test_cached_routes_still_work_when_the_quota_is_gone(client):
@@ -292,3 +299,73 @@ def test_scores_are_recomputed_even_on_a_cache_hit(client, monkeypatch):
 
     assert second["from_cache"] is True
     assert second["weather"]["temperature_c"] == -5.0
+
+
+# --- when the hills are further out than the loop reaches -------------------
+
+class TerrainEngine(StubEngine):
+    """Flat close to home, hilly further out — the shape of a city on a plain
+    with hills at its edge, which is the whole reason to look further."""
+
+    async def round_trips(self, lat, lon, length_m, sport, surface, seeds):
+        self.calls.append((lat, lon, length_m, sport, surface, len(seeds)))
+        climb = 30.0 if length_m <= 12000 else 620.0
+        return [circle(distance_m=length_m, climb=climb),
+                circle(distance_m=length_m * 0.96, climb=climb * 0.8,
+                       center_lon=9.26)], []
+
+
+def test_impossible_climb_is_answered_with_a_longer_route_that_has_it(client):
+    client.app.state.engine = TerrainEngine()
+
+    data = client.post(
+        "/api/search", json=search_body(distance_km=10, elevation_gain_m=800)
+    ).json()
+
+    assert "climb_target_unreachable" in data["notices"]
+    assert "stretched_alternative" in data["notices"]
+
+    keeps_distance = [r for r in data["routes"] if "distance" in r["best_for"]]
+    climbs_most = [r for r in data["routes"] if "gain" in r["best_for"]]
+    assert keeps_distance and climbs_most
+    assert keeps_distance[0]["distance_m"] < climbs_most[0]["distance_m"]
+    assert climbs_most[0]["ascent_m"] > keeps_distance[0]["ascent_m"] * 2
+
+
+def test_the_longer_alternative_can_still_be_downloaded(client):
+    """It is offered as a route, so it has to behave like one."""
+    client.app.state.engine = TerrainEngine()
+    data = client.post(
+        "/api/search", json=search_body(distance_km=10, elevation_gain_m=800)
+    ).json()
+
+    longer = [r for r in data["routes"] if "gain" in r["best_for"]][0]
+    assert client.get("/api/gpx/" + longer["id"]).status_code == 200
+
+
+def test_a_reachable_request_never_pays_for_a_second_search(client):
+    client.app.state.engine = TerrainEngine()
+
+    client.post("/api/search", json=search_body(distance_km=10, elevation_gain_m=30))
+
+    lengths = [call[2] for call in client.app.state.engine.calls]
+    assert lengths == [10000.0]
+
+
+def test_a_spent_quota_on_the_extra_search_does_not_lose_the_results(client):
+    """The longer look is a bonus answer, not the answer."""
+    class OnlyOnce(TerrainEngine):
+        async def round_trips(self, lat, lon, length_m, sport, surface, seeds):
+            if length_m > 12000:
+                raise RoutingError("Quota exceeded")
+            return await TerrainEngine.round_trips(
+                self, lat, lon, length_m, sport, surface, seeds
+            )
+
+    client.app.state.engine = OnlyOnce()
+    data = client.post(
+        "/api/search", json=search_body(distance_km=10, elevation_gain_m=800)
+    ).json()
+
+    assert data["routes"]
+    assert "stretched_alternative" not in data["notices"]
