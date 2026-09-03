@@ -105,6 +105,8 @@ async def options() -> Dict[str, object]:
         "sports": config.SPORTS,
         "surfaces": config.SURFACE_PREFERENCES,
         "sights": config.SIGHTS,
+        "default_distance_km": config.DEFAULT_DISTANCE_KM,
+        "distance_range_km": config.DISTANCE_RANGE_KM,
     }
 
 
@@ -440,7 +442,10 @@ async def interpret(request: InterpretRequest) -> InterpretResponse:
                     parsed, resolved, unresolved = retry, second, still_missing
 
     return InterpretResponse(
-        understood=intent_reader.summarise(parsed, request.lang),
+        understood=intent_reader.summarise(
+            parsed, request.lang,
+            exact_climb=intent_reader.stated_climb(request.sentence),
+        ),
         sport=parsed.sport,
         mode=parsed.mode,
         distance_km=parsed.distance_km,

@@ -17,6 +17,13 @@ const state = {
   // Which cards the reader opened, so a re-render does not fold them again.
   expanded: {},
   distanceKm: 10,
+  // Whether the distance on the slider was chosen or is just our default.
+  // Only a default follows the sport when the sport changes; a number somebody
+  // set stays set.
+  distanceChosen: false,
+  // Filled from /api/options, so the domain figures live in one place.
+  defaultDistance: { running: 10, cycling: 30 },
+  distanceRange: { running: [2, 60], cycling: [5, 160] },
   gainM: 150,
   // Both targets are opt-in. A default climb target of 150 m is unreachable
   // in a flat city, which would score every candidate zero on that axis.
@@ -585,11 +592,36 @@ function updateMapHint() {
 }
 
 function setDistance(km) {
-  state.distanceKm = km;
   const input = document.getElementById("distance");
+  // Widen the track before setting the value: an input clamps silently to its
+  // own max, so a 100 km ride was landing on the slider as 60 while the search
+  // still asked for 100.
+  applyDistanceRange();
+  km = Math.max(Number(input.min), Math.min(Number(input.max), km));
+  state.distanceKm = km;
   input.value = km;
   document.getElementById("distanceValue").textContent = km;
   paintSlider(input);
+}
+
+// The slider could not express the calibration: a long ride is 100 km against
+// a maximum of 60. The range follows the sport.
+function applyDistanceRange() {
+  const range = state.distanceRange[state.sport] || state.distanceRange.running;
+  const input = document.getElementById("distance");
+  input.min = range[0];
+  input.max = range[1];
+}
+
+// Ten kilometres is a run; on a bike it is barely a warm-up. When nobody has
+// said how far, the guess follows the sport rather than sitting at one number.
+function syncDistanceToSport() {
+  applyDistanceRange();
+  if (state.distanceChosen) {
+    setDistance(state.distanceKm);
+    return;
+  }
+  setDistance(state.defaultDistance[state.sport] || 10);
 }
 
 // ---------------------------------------------------------------- views
@@ -1308,6 +1340,7 @@ function applyIntent(data) {
     remember("doiamo_sport", data.sport);
   }
   setSegmented("sport", state.sport);
+  syncDistanceToSport();
   if (data.surface) { state.surface = data.surface; setSegmented("surface", data.surface); }
   if (data.sights) { state.sights = data.sights; setSegmented("sights", data.sights); }
   // Said or not said each time: "rimanere in citta" is part of this sentence,
@@ -1335,6 +1368,7 @@ function applyIntent(data) {
   applyMode();
 
   if (data.distance_km) {
+    state.distanceChosen = true;
     setDistance(Math.round(data.distance_km));
     state.distanceAny = false;
     document.getElementById("distanceAny").checked = false;
@@ -1445,6 +1479,7 @@ async function askSearch() {
         state.sportChosen = true;
         remember("doiamo_sport", state.sport);
         setSegmented("sport", state.sport);
+        syncDistanceToSport();
         askSearch();
       });
     }
@@ -1798,18 +1833,16 @@ function wireEverything() {
   wireSegmented("sights", "sights");
   wireSegmented("sport", "sport", () => {
     remember("doiamo_sport", state.sport);
-    // A cyclist asking for 10 km is not asking for the same ride a runner is.
-    const distance = document.getElementById("distance");
-    distance.max = state.sport === "cycling" ? 120 : 60;
-    if (state.sport === "cycling" && state.distanceKm < 15) setDistance(30);
-    else if (state.sport === "running" && state.distanceKm > 60) setDistance(10);
-    else paintSlider(distance);
+    // Choosing the sport by hand is not choosing the distance, so a default
+    // still follows; a number already set stays set.
+    syncDistanceToSport();
   });
 
   wirePlaceField("start");
   wirePlaceField("end");
 
   document.getElementById("distance").addEventListener("input", (e) => {
+    state.distanceChosen = true;
     state.distanceKm = Number(e.target.value);
     document.getElementById("distanceValue").textContent = state.distanceKm;
     paintSlider(e.target);
@@ -1914,6 +1947,10 @@ async function boot() {
     const data = await (await fetch("/api/options")).json();
     const view = data.default_view;
     if (view) map.setView(view.center, view.zoom);
+    // How far is a domain figure, kept beside the calibration it came from.
+    if (data.default_distance_km) state.defaultDistance = data.default_distance_km;
+    if (data.distance_range_km) state.distanceRange = data.distance_range_km;
+    syncDistanceToSport();
   } catch (err) {
     /* the map keeps its built-in starting view */
   }

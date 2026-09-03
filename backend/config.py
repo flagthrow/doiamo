@@ -259,6 +259,20 @@ SIGHTS: List[str] = ["both", "monuments", "nature", "none"]
 MODES: List[str] = ["loop", "route"]
 
 SPORTS: List[str] = ["running", "cycling"]
+
+# What to search for when nobody says how far. Ten kilometres is a run; on a
+# bike it is the distance you cover before you have decided where you are
+# going, which is why "un giro in bici con 800 m di dislivello" came back with
+# a five kilometre option. Taken from the ride calibration: an untrained
+# person's short outing, which is the safe end to guess at.
+DEFAULT_DISTANCE_KM: Dict[str, float] = {"running": 10.0, "cycling": 30.0}
+
+# The slider could not express the calibration it was given: a long ride is
+# 100 km and a trained one 130, against a maximum of 60.
+DISTANCE_RANGE_KM: Dict[str, List[int]] = {
+    "running": [2, 60],
+    "cycling": [5, 160],
+}
 SURFACE_PREFERENCES: List[str] = ["asphalt", "mixed", "trail"]
 
 # ORS profile per (sport, surface preference). Picking the right profile does

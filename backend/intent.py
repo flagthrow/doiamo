@@ -519,7 +519,14 @@ def read_detailed(sentence: str) -> Tuple[Intent, bool]:
     ), guessed_distance
 
 
-def summarise(intent: Intent, language: str = "it") -> List[str]:
+def stated_climb(sentence: str) -> bool:
+    """Did they give a number of metres, rather than a word we mapped to one?"""
+    return _numeric_climb(normalise(sentence)) is not None
+
+
+def summarise(
+    intent: Intent, language: str = "it", exact_climb: bool = False
+) -> List[str]:
     """What was understood, in the viewer's language, to be shown back."""
     it = language != "en"
     out: List[str] = []
@@ -533,10 +540,16 @@ def summarise(intent: Intent, language: str = "it") -> List[str]:
         # calling 150 m "molto dislivello" reads as a misunderstanding.
         gain = intent.elevation_gain_m
         tiers = CLIMB_TARGETS.get(intent.sport or "running", CLIMB_TARGETS["running"])
+        if exact_climb:
+            # A number they typed is shown back as that number. Mapping 800 m
+            # onto "un po' di dislivello" and printing the word instead reads
+            # as though the figure was never taken in.
+            out.append("{:.0f} m di dislivello".format(gain) if it
+                       else "{:.0f} m of climb".format(gain))
         # Banded against what counts as a lot for this sport, not against the
         # "some" target: a medium ride's 600 m sits well above cycling's "un
         # po'" figure of 500 and calling it "molto dislivello" overstates it.
-        if gain <= tiers["flat"]:
+        elif gain <= tiers["flat"]:
             out.append("poco dislivello" if it else "little climbing")
         elif gain < tiers["hilly"] * 0.75:
             out.append("un po' di dislivello" if it else "some climbing")

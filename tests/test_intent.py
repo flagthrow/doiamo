@@ -16,6 +16,7 @@ from backend.intent import (
     read_detailed,
     normalise,
     read,
+    stated_climb,
     summarise,
 )
 
@@ -709,3 +710,47 @@ def test_around_a_town_is_not_inside_its_centre():
     parsed = read("una corsa intorno a Bologna")
     assert parsed.start_text == "bologna"
     assert parsed.area is None
+
+
+# --- how far is a ride, when nobody says --------------------------------
+
+def test_a_stated_climb_is_shown_back_as_the_number():
+    """Mapping 800 m onto "un po' di dislivello" and printing the word reads
+    as though the figure was never taken in."""
+    sentence = "un giro in bici con 800mt di dislivello"
+    said = summarise(read(sentence), "it", exact_climb=stated_climb(sentence))
+    assert "800 m di dislivello" in said
+
+
+def test_a_climb_we_inferred_is_still_shown_as_a_word():
+    sentence = "un giro in bici con molto dislivello"
+    said = summarise(read(sentence), "it", exact_climb=stated_climb(sentence))
+    assert "molto dislivello" in said
+
+
+def test_stated_climb_only_reports_a_real_number():
+    assert stated_climb("un giro con 800 metri di dislivello") is True
+    assert stated_climb("un giro con molto dislivello") is False
+    assert stated_climb("un giro di 800 metri") is False
+
+
+def test_a_ride_and_a_run_do_not_default_to_the_same_distance():
+    """Ten kilometres is a run; on a bike it is the distance you cover before
+    deciding where you are going."""
+    from backend import config
+
+    assert config.DEFAULT_DISTANCE_KM["cycling"] > config.DEFAULT_DISTANCE_KM["running"]
+    # The calibration's short ride, which is the safe end to guess at.
+    assert config.DEFAULT_DISTANCE_KM["cycling"] == RIDE_SIZES["cycling"]["normal"]["small"][0]
+
+
+def test_the_slider_can_express_the_calibration_it_was_given():
+    """A long ride is 100 km and a trained one 130, against a maximum of 60."""
+    from backend import config
+
+    for sport in ("running", "cycling"):
+        low, high = config.DISTANCE_RANGE_KM[sport]
+        for fitness in ("normal", "trained"):
+            for size in ("small", "medium", "large"):
+                km = RIDE_SIZES[sport][fitness][size][0]
+                assert low <= km <= high, (sport, fitness, size, km)
