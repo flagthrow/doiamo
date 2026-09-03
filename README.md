@@ -296,9 +296,10 @@ file, so peak memory follows the largest region instead of the whole country.
 `pyosmium` is in `requirements-tools.txt`, not `requirements.txt`: it needs a
 build toolchain and has no business in a deployment image.
 
-Several extracts go into one database, each keeping its own coverage. North-west
-Italy alone is **139,485 POIs in 19 MB**, about 13 minutes to build; the whole
-country is roughly an hour. Re-run it when you want fresher data; drinking
+Several extracts go into one database, each keeping its own coverage. The whole
+of Italy is **447,998 POIs and 15,974 places in 60 MB**, built from the five
+regional extracts in 54 minutes; the north-west alone is 139,485 POIs in 19 MB
+and about 13. Re-run it when you want fresher data; drinking
 fountains do not move weekly. `data/` is gitignored — the database is
 rebuildable, not source.
 
@@ -473,11 +474,11 @@ back to Overpass, and the points of interest simply do not appear — Overpass
 failed roughly one call in three when measured.
 
 ```
-POI_DB_URL=https://github.com/flagthrow/doiamo/releases/download/poi-data-2026-09-02/pois.sqlite
+POI_DB_URL=https://github.com/flagthrow/doiamo/releases/download/poi-data-2026-09-04/pois.sqlite
 ```
 
-The file is fetched once at startup if it is not already on disk — about four
-seconds for 18 MB. It downloads to a temporary name and renames on success, so
+The file is fetched once at startup if it is not already on disk — about
+fifteen seconds for 60 MB. It downloads to a temporary name and renames on success, so
 an interrupted download never leaves a half-written database that SQLite would
 open and quietly report as empty.
 
