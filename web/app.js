@@ -1121,6 +1121,16 @@ function renderResults() {
     link.href = "/api/gpx/" + route.id;
     link.textContent = t("download");
     actions.append(mapButton, link);
+    // Only offered where the browser can actually hand a file to another app.
+    // A button that quietly turns into a download is worse than no button.
+    if (canShareFiles()) {
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "send";
+      send.textContent = t("sendToWatch");
+      send.addEventListener("click", () => shareGpx(route, send));
+      actions.appendChild(send);
+    }
 
     // Five cards of eight bars each is a wall. The headline — distance, climb,
     // surface, traffic, score — is what you choose on; the rest is what you
@@ -1453,6 +1463,48 @@ async function search() {
   } finally {
     button.disabled = false;
     button.textContent = t("search");
+  }
+}
+
+// ---------------------------------------------------------------- sharing
+// There is no public URL that opens a route in Garmin Connect, and the Connect
+// API that could push one directly needs approval from Garmin. What does work
+// today, on a phone, is handing the .gpx to the operating system: Garmin
+// Connect registers itself as somewhere a GPX can go, so it shows up in the
+// share sheet next to everything else that reads them.
+function canShareFiles() {
+  if (!navigator.canShare || !navigator.share) return false;
+  try {
+    // Feature-detect with a real file: some browsers expose share() but refuse
+    // files, and canShare() is the only way to find out without failing loudly.
+    return navigator.canShare({
+      files: [new File(["<gpx/>"], "probe.gpx", { type: "application/gpx+xml" })],
+    });
+  } catch (err) {
+    return false;
+  }
+}
+
+async function shareGpx(route, button) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = t("preparing");
+  try {
+    const response = await fetch("/api/gpx/" + route.id);
+    if (!response.ok) throw new Error("gpx " + response.status);
+    const blob = await response.blob();
+    const name = "doiamo-" + state.sport + "-" +
+      (route.distance_m / 1000).toFixed(0) + "km-" + route.id.slice(0, 6) + ".gpx";
+    const file = new File([blob], name, { type: "application/gpx+xml" });
+    if (!navigator.canShare({ files: [file] })) throw new Error("cannot share");
+    await navigator.share({ files: [file], title: name });
+  } catch (err) {
+    // Dismissing the share sheet raises AbortError, which is not a failure and
+    // must not be reported as one.
+    if (!err || err.name !== "AbortError") message(t("shareFailed"), "warn");
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
   }
 }
 
