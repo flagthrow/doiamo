@@ -588,12 +588,19 @@ def test_asking_for_lots_of_climb_is_described_as_a_lot():
 
 
 def test_a_size_word_alone_still_leaves_the_sentence_thin():
-    """The size table supplies a distance we chose, not one they gave. Counting
-    it as knowledge stopped "una corsetta intorno a L'Aquila" reaching the
-    model, and the place went with it — the route came back around Milan."""
-    parsed, guessed = read_detailed("una corsetta intorno a l'aquila")
+    """The size table supplies a distance we chose, not one they gave, so on
+    its own it is not grounds to skip the model."""
+    parsed, guessed = read_detailed("una corsetta tranquilla")
     assert guessed is True
     assert is_thin(parsed, guessed) is True
+
+
+def test_a_size_word_beside_a_place_no_longer_needs_the_model():
+    """"Una corsetta intorno a L'Aquila" used to reach the model because the
+    rules could not see the place; now they can, and it costs nothing."""
+    parsed, guessed = read_detailed("una corsetta intorno a l'aquila")
+    assert parsed.start_text == "l'aquila"
+    assert is_thin(parsed, guessed) is False
 
 
 def test_a_distance_they_actually_gave_is_not_thin():
@@ -643,3 +650,62 @@ def test_an_article_is_not_part_of_the_name():
 
 def test_a_trailing_city_does_not_swallow_the_landmark():
     assert read("starting at Hyde Park in London").start_text == "hyde park"
+
+
+# --- a number of metres is not a tier --------------------------------------
+
+@pytest.mark.parametrize("sentence,metres", [
+    ("con 800mt di dislivello", 800.0),
+    ("800 metri di dislivello", 800.0),
+    ("un giro con 1200 m di salita", 1200.0),
+    ("dislivello di 450 metri", 450.0),
+    ("with 800 m of climbing", 800.0),
+])
+def test_a_stated_climb_is_used_as_stated(sentence, metres):
+    """There was no numeric reading at all: "con 800mt di dislivello" matched
+    "con" plus "dislivello" and came back as the generic hilly tier, throwing
+    away a number somebody took the trouble to type."""
+    assert read(sentence).elevation_gain_m == metres
+
+
+def test_a_distance_in_metres_is_not_read_as_climb():
+    assert read("un giro di 800 metri").elevation_gain_m is None
+
+
+def test_a_stated_climb_survives_the_size_table():
+    """"Corsetta" fills in 100 m from the calibration; 800 was asked for."""
+    parsed = read("una corsetta con 800 metri di dislivello")
+    assert parsed.distance_km == 5.0
+    assert parsed.elevation_gain_m == 800.0
+
+
+# --- naming the middle of a town names the town ----------------------------
+
+@pytest.mark.parametrize("sentence,place", [
+    ("un giro nel centro di Firenze", "firenze"),
+    ("una corsa nel centro storico di Bologna", "bologna"),
+    ("una corsa intorno a Bologna", "bologna"),
+    ("corsetta intorno al Duomo", "duomo"),
+    ("nei dintorni di Como", "como"),
+    ("a run around Hyde Park", "hyde park"),
+    ("downtown Chicago", "chicago"),
+])
+def test_the_town_is_kept_when_its_centre_is_named(sentence, place):
+    """Read as an area alone, "nel centro di bologna" searched wherever the
+    reader happened to be standing."""
+    assert read(sentence).start_text == place
+
+
+@pytest.mark.parametrize("sentence", [
+    "voglio correre in centro",
+    "un giro intorno a me",
+    "voglio rimanere in citta",
+])
+def test_a_generic_middle_is_still_not_a_place(sentence):
+    assert read(sentence).start_text is None
+
+
+def test_around_a_town_is_not_inside_its_centre():
+    parsed = read("una corsa intorno a Bologna")
+    assert parsed.start_text == "bologna"
+    assert parsed.area is None

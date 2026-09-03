@@ -757,6 +757,9 @@ footer p { margin: 0 0 5px; }
 .details-toggle:hover { color: var(--ink); }
 .details-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+#resultNotes:empty { display: none; }
+#resultNotes .notice { margin: 0; }
+
 /* Which half of an impossible request this route answers. Amber, like the
    other "usable, but not what you asked for" marks. */
 .best-for {

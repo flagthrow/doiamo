@@ -600,6 +600,8 @@ function moveControls(target) {
 function showHome() {
   state.view = "home";
   document.body.dataset.view = "home";
+  // A warning about the last search must not outlive it.
+  notify("");
   moveControls("heroSlot");
   document.getElementById("newSearch").hidden = true;
   document.getElementById("search").textContent = t("search");
@@ -687,6 +689,21 @@ function message(text, kind, focus) {
   box.appendChild(note);
   // The panel is taller than the hero, so a message can land below the fold.
   if (focus) note.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+// A search notice belongs beside the results it describes. #messages lives
+// inside #controls, which the results page folds into a hidden slot — so every
+// warning written there was correct, rendered, and invisible: no flat route
+// available, only busy roads, the longer alternative, all of it.
+function notify(text) {
+  const box = document.getElementById("resultNotes");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!text) return;
+  const note = document.createElement("div");
+  note.className = "notice warn";
+  note.textContent = text;
+  box.appendChild(note);
 }
 
 let lastPayload = null;
@@ -1548,7 +1565,7 @@ async function search() {
     else if (notices.includes("climb_target_unreachable")) notes.push(t("noClimbOption"));
     if (notices.includes("distance_target_unreachable")) notes.push(t("noDistanceOption"));
     if (notices.includes("no_route_of_that_length")) notes.push(t("noRouteOfLength"));
-    message(notes.join(" "), notes.length ? "warn" : "");
+    notify(notes.join(" "));
 
     renderContext();
     renderResults();

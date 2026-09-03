@@ -327,8 +327,35 @@ def _size(text: str) -> Optional[str]:
     return best
 
 
+# Metres of climb, said outright. There was no numeric reading at all before:
+# "con 800mt di dislivello" matched "con" + "dislivello" and came back as the
+# generic hilly tier, so a number somebody took the trouble to type was thrown
+# away and replaced with a guess.
+GAIN_UNITS = r"(?:m|mt|mts|metri|metro|metres|metre|meters|meter)"
+GAIN_GAP = r"(?:\s+\S+){0,2}?\s+"
+NUMERIC_GAIN = (
+    re.compile(r"\b(\d{2,4})\s*" + GAIN_UNITS + r"\b" + GAIN_GAP + CLIMB_NOUNS),
+    re.compile(CLIMB_NOUNS + GAIN_GAP + r"(\d{2,4})\s*" + GAIN_UNITS + r"\b"),
+)
+
+
+def _numeric_climb(text: str) -> Optional[float]:
+    """"800mt di dislivello", or "dislivello di 800 metri"."""
+    for pattern in NUMERIC_GAIN:
+        found = pattern.search(text)
+        if found:
+            metres = float(found.group(1))
+            if 10.0 <= metres <= 6000.0:
+                return metres
+    return None
+
+
 def _climb(text: str, sport: Optional[str] = None) -> Optional[float]:
     """How the person feels about hills, as a target in metres."""
+    # A stated number beats every guess below it.
+    stated = _numeric_climb(text)
+    if stated is not None:
+        return stated
     targets = CLIMB_TARGETS.get(sport or "running", CLIMB_TARGETS["running"])
     for word in FLAT_WORDS:
         if word in text:
@@ -402,6 +429,17 @@ def _places(text: str) -> Dict[str, Optional[str]]:
     start = None
     for pattern in (r"\bparto\s+" + da + r"(.+?)" + stop,
                     r"\bpartendo\s+" + da + r"(.+?)" + stop,
+                    # Naming the middle of a town also names the town. Read as
+                    # an area alone, "nel centro di bologna" searched wherever
+                    # the reader happened to be standing.
+                    r"\bcentro\s+storico\s+(?:di|a|del|della|dell')\s*(.+?)" + stop,
+                    r"\b(?:nel|in|al)\s+centro\s+(?:di|a|del|della|dell')\s*(.+?)" + stop,
+                    r"\bintorno\s+a(?:l|lla|llo|i|gli|lle)?\s+(.+?)" + stop,
+                    r"\bintorno\s+all'\s*(.+?)" + stop,
+                    r"\bnei\s+dintorni\s+di\s+(.+?)" + stop,
+                    r"\b(?:city|town)\s+cent(?:re|er)\s+of\s+(?:the\s+)?(.+?)" + stop,
+                    r"\bdowntown\s+(.+?)" + stop,
+                    r"\baround\s+(?:the\s+)?(.+?)" + stop,
                     r"\bvicino (?:a|al|alla|ai|alle|allo) (.+?)" + stop,
                     r"\bzona (.+?)" + stop,
                     r"\bstarting (?:from|at) (.+?)" + stop,
@@ -598,6 +636,12 @@ area: "centre" if they ask for the middle of town, the centro storico or \
 downtown; "urban" if they ask to stay in town generally. This is about where \
 the route goes, not what it is paved with. Leave it null if they say nothing, \
 and null — never either value — if they want to get out of town.
+
+area and start_text are independent, and a sentence often gives both. "Nel \
+centro di Bologna" is area "centre" AND start_text "Bologna": naming the middle \
+of a town still names the town, and dropping it sends the search to wherever \
+the person happens to be standing. "Intorno a Bologna" is start_text "Bologna" \
+with no area at all — around a place is not inside its centre.
 start_text: the place they set off from, as written. Only a name you could
 find on a map — a town, a district, a named park, a street, a landmark. Never a
 description of where they want to be, like "fuori citta", "out of town", "in
