@@ -52,3 +52,7 @@ un giro in bici da 600 kcal
 consigliami un bel giro tranquillo
 vorrei sgranchirmi le gambe senza allontanarmi troppo da casa
 una corsetta qui vicino
+
+# a sentence that names nowhere, typed after one that named somewhere
+voglio fare un giro in bici di 60km intorno a me con 800mt di dislivello
+vicino a me senza salite

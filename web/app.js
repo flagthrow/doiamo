@@ -1358,8 +1358,22 @@ function applyIntent(data) {
     state.massKg = state.massKg || data.mass_kg;
   }
 
-  if (data.start) setPoint("start", data.start.lat, data.start.lon, data.start.label, false);
-  if (data.end) setPoint("end", data.end.lat, data.end.lon, data.end.label, false);
+  // Each sentence is a whole search, not an edit to the last one. Setting a
+  // place without ever clearing one meant a sentence naming nowhere inherited
+  // the previous sentence's place: after searching Bologna, "intorno a me"
+  // searched Bologna. Clearing it lets the "from here" fallback do its job.
+  if (data.start) {
+    setPoint("start", data.start.lat, data.start.lon, data.start.label, false);
+  } else {
+    clearPoint("start");
+    syncPlaceInput("start");
+  }
+  if (data.end) {
+    setPoint("end", data.end.lat, data.end.lon, data.end.label, false);
+  } else {
+    clearPoint("end");
+    syncPlaceInput("end");
+  }
 
   // No destination named means a loop — "voglio correre 10 km" is a loop from
   // wherever you are, not half a journey to nowhere.
