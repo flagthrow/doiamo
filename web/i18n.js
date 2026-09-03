@@ -384,7 +384,28 @@ const STRINGS = {
   },
 };
 
-let currentLang = localStorage.getItem("doiamo_lang") || "it";
+// Italian was the default because the first people told about this are in
+// Italian groups. But the person this helps most is the one who does not know
+// the area — in a big city, that is very often a visitor, and greeting them in
+// a language they may not read is the wrong way round. Ask the browser: an
+// Italian one gets Italian, anything else gets English, and a stored choice
+// beats both because it was made on purpose.
+function preferredLang() {
+  try {
+    const stored = localStorage.getItem("doiamo_lang");
+    if (stored && STRINGS[stored]) return stored;
+  } catch (err) {
+    /* private browsing */
+  }
+  const asked = (navigator.languages || [navigator.language || ""])
+    .map((tag) => String(tag).slice(0, 2).toLowerCase());
+  for (const tag of asked) {
+    if (STRINGS[tag]) return tag;
+  }
+  return "en";
+}
+
+let currentLang = preferredLang();
 
 function t(key) {
   return (STRINGS[currentLang] && STRINGS[currentLang][key]) || STRINGS.en[key] || key;
