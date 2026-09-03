@@ -445,3 +445,32 @@ def _ranked(routes, distance_km=10.0):
         elevation_gain_m=800.0, surface="asphalt", sights="both", mode="loop",
     )
     return candidates.rank(routes, request, CALM, {})[0]
+
+
+def test_a_cyclist_prefers_the_route_with_the_bike_lane():
+    """Traffic exposure already prices a cycleway as quiet, which is not the
+    same as preferring one: two equally quiet routes were indistinguishable."""
+    lane = make_route(waytype={6: 8000.0, 3: 2000.0})
+    street = make_route(waytype={7: 8000.0, 3: 2000.0}, center_lon=9.26)
+
+    ranked, _, _ = candidates.rank([lane, street], request(sport="cycling"), CALM, {})
+
+    assert ranked[0].bikeway_share > ranked[1].bikeway_share
+
+
+def test_a_runner_prefers_the_bike_lane_too():
+    """An Italian pista ciclabile is usually ciclopedonale — a path away from
+    cars, which is where you would rather run as well as ride."""
+    lane = make_route(waytype={6: 8000.0, 3: 2000.0})
+    street = make_route(waytype={7: 8000.0, 3: 2000.0}, center_lon=9.26)
+
+    ranked, _, _ = candidates.rank([lane, street], request(sport="running"), CALM, {})
+
+    assert ranked[0].bikeway_share > ranked[1].bikeway_share
+
+
+def test_bike_lanes_count_for_both_sports_and_more_on_wheels():
+    for table in (config.WEIGHTS, config.ROUTE_WEIGHTS):
+        assert table["cycling"]["bikeway"] > table["running"]["bikeway"] > 0
+        for sport in ("running", "cycling"):
+            assert round(sum(table[sport].values()), 6) == 1.0

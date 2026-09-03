@@ -172,8 +172,8 @@ class _Measured:
 
     __slots__ = (
         "raw", "coords", "distance_m", "ascent_m", "descent_m", "paved_share",
-        "traffic_exposure", "big_road_share", "urban_share", "headwind_share",
-        "step_distance_m", "air", "cells",
+        "traffic_exposure", "big_road_share", "urban_share", "bikeway_share",
+        "headwind_share", "step_distance_m", "air", "cells",
     )
 
     def __init__(self, raw: RawRoute, weather: WeatherContext) -> None:
@@ -191,6 +191,7 @@ class _Measured:
         self.traffic_exposure = _weighted_share(raw.waytype, config.WAYTYPE_EXPOSURE)
         self.big_road_share = _share_of(raw.waytype, config.BIG_ROAD_WAYTYPES)
         self.urban_share = _share_of(raw.waytype, config.URBAN_WAYTYPES)
+        self.bikeway_share = _share_of(raw.waytype, config.BIKEWAY_WAYTYPES)
         self.step_distance_m = raw.waytype.get(config.STEPS_WAYTYPE, 0.0)
         self.headwind_share = geo.headwind_exposure(
             self.coords,
@@ -401,6 +402,8 @@ def rank(
             "traffic": 1.0 - item.traffic_exposure,
             "wind": 1.0 - item.headwind_share,
         }
+        if "bikeway" in weights:
+            parts["bikeway"] = item.bikeway_share
         if "urban" in weights:
             # Streets and pavements count for you, farm tracks and trunk roads
             # against; everything else is neither and simply does not vote.
@@ -503,6 +506,7 @@ def rank(
                 traffic_exposure=round(item.traffic_exposure, 4),
                 big_road_share=round(item.big_road_share, 4),
                 urban_share=round(item.urban_share, 4),
+                bikeway_share=round(item.bikeway_share, 4),
                 best_for=tags.get(position, []),
                 calories_kcal=round(energy.kcal_for_route(
                     item.coords, request.sport, request.mass_kg,

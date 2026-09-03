@@ -124,6 +124,15 @@ STEPS_WAYTYPE = 8
 URBAN_WAYTYPES = (3, 7, 8)      # street, footway, steps
 RURAL_WAYTYPES = (1, 2, 5)      # state road, road, track
 
+# Separated bike infrastructure, and a good thing on foot as well as on wheels:
+# an Italian pista ciclabile is usually ciclopedonale, a path away from cars
+# that takes runners too. Traffic exposure already prices it as quiet, but
+# quiet is not the whole of it — a protected lane is the difference between a
+# route somebody goes and does and one they look at and close the tab. It earns
+# its own term rather than staying folded inside a proxy for it, and weighs
+# less on foot than on a bike only because a runner has more say over surface.
+BIKEWAY_WAYTYPES = (6,)         # cycleway
+
 AREAS: List[str] = ["any", "urban"]
 
 # Rough pace, used where no route timing exists yet — turning "un'ora" into a
@@ -157,19 +166,21 @@ BIG_ROAD_WARN_SHARE = float(os.environ.get("BIG_ROAD_WARN_SHARE", "0.15"))
 # direct route and the flatter route each score better than their siblings.
 ROUTE_WEIGHTS: Dict[str, Dict[str, float]] = {
     "running": {
-        "distance": 0.22,
-        "gain": 0.13,
-        "surface": 0.25,
-        "traffic": 0.25,
-        "wind": 0.05,
-        "air": 0.10,
+        "distance": 0.20,
+        "gain": 0.12,
+        "surface": 0.23,
+        "traffic": 0.22,
+        "bikeway": 0.10,
+        "wind": 0.04,
+        "air": 0.09,
     },
     "cycling": {
-        "distance": 0.20,
-        "gain": 0.13,
-        "surface": 0.16,
-        "traffic": 0.36,
-        "wind": 0.10,
+        "distance": 0.17,
+        "gain": 0.11,
+        "surface": 0.14,
+        "traffic": 0.31,
+        "bikeway": 0.14,
+        "wind": 0.08,
         "air": 0.05,
     },
 }
@@ -181,18 +192,20 @@ ROUTE_WEIGHTS: Dict[str, Dict[str, float]] = {
 # stays in ROUTE_WEIGHTS, where going one way genuinely can be into the wind.
 WEIGHTS: Dict[str, Dict[str, float]] = {
     "running": {
-        "distance": 0.19,
-        "gain": 0.19,
-        "surface": 0.20,
-        "traffic": 0.27,
-        "air": 0.15,
+        "distance": 0.17,
+        "gain": 0.17,
+        "surface": 0.18,
+        "traffic": 0.24,
+        "bikeway": 0.10,
+        "air": 0.14,
     },
     "cycling": {
-        "distance": 0.18,
-        "gain": 0.18,
-        "surface": 0.16,
-        "traffic": 0.38,
-        "air": 0.10,
+        "distance": 0.15,
+        "gain": 0.15,
+        "surface": 0.14,
+        "traffic": 0.32,
+        "bikeway": 0.15,
+        "air": 0.09,
     },
 }
 

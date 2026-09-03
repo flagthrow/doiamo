@@ -908,6 +908,7 @@ function describeRoute(route) {
 
   let extra = null;
   if ((route.big_road_share || 0) >= 0.15) extra = t("sumBusy");
+  else if ((route.bikeway_share || 0) >= 0.4) extra = t("sumBikeway");
   else if (perKmWater >= 0.5) extra = t("sumWater");
   else if (km > 0 && sights / km >= 2) extra = t("sumSights");
   else if (route.traffic_exposure <= 0.2) extra = t("sumQuiet");
@@ -1092,6 +1093,13 @@ function renderResults() {
         Math.round(route.calories_kcal) + " kcal"
       ));
     }
+
+    // Shown for both: an Italian ciclabile is usually ciclopedonale, so it is
+    // a path away from cars for whoever is on it.
+    bars.appendChild(bar(
+      t("scoreBikeway"), route.bikeway_share || 0,
+      Math.round((route.bikeway_share || 0) * 100) + "% " + t("bikewayShort")
+    ));
 
     // Traffic: metres beside fast roads, which is the thing you can act on.
     bars.appendChild(bar(
