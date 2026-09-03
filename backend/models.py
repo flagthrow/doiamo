@@ -90,6 +90,9 @@ class RouteCandidate(BaseModel):
     urban_share: float = 0.0
     # An estimate, and the body mass behind it is the biggest unknown in it.
     calories_kcal: float = 0.0
+    # Which part of an unsatisfiable request this route is the best answer to:
+    # "distance", "gain", or both. Empty when everything asked for was had.
+    best_for: List[str] = []
     # Share of the route's length on state or trunk roads. Separate from the
     # weighted exposure score because a badge needs a fraction of metres, not a
     # ranking term.

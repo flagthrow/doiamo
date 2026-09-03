@@ -117,10 +117,17 @@ def test_uniform_air_is_reported_as_context_not_as_a_ranking_signal(client):
 
 def test_anywhere_in_the_world_is_served_without_a_warning(client):
     """Routing, weather, air and POIs are all global — there is no supported
-    region, and a runner in Paris must not be told they are out of bounds."""
-    data = client.post("/api/search", json=search_body(lat=48.8566, lon=2.3522)).json()
-    assert data["routes"]
-    assert data["notices"] == []
+    region, and a runner in Paris must not be told they are out of bounds.
+
+    Asserted against an identical search in Milan rather than against an empty
+    list: a notice about the ground being flat is a fact about the routes, and
+    the claim here is that Paris is treated no differently from anywhere else.
+    """
+    paris = client.post("/api/search", json=search_body(lat=48.8566, lon=2.3522)).json()
+    milan = client.post("/api/search", json=search_body()).json()
+
+    assert paris["routes"]
+    assert paris["notices"] == milan["notices"]
 
 
 def test_gpx_download_round_trips_from_the_search_result(client):

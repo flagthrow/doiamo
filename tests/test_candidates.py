@@ -322,3 +322,81 @@ def test_stubs_are_dropped_while_a_real_route_survives():
 
     assert [round(r.distance_m) for r in ranked] == [10100]
     assert "some_routes_too_short" in notices
+
+
+# --- when the request cannot be satisfied at all ---------------------------
+
+def test_asking_for_climb_on_flat_ground_says_so():
+    """The mirror of the hilly case, and the one that was silent: the check
+    only ever fired when everything was too steep, never too flat."""
+    flat = [_hilly(g, 10000.0, 9.19 + i * 0.02)
+            for i, g in enumerate((15.0, 30.0, 25.0))]
+    request = SearchRequest(
+        lat=45.4642, lon=9.19, sport="running", distance_km=10.0,
+        elevation_gain_m=500.0, surface="asphalt", sights="both", mode="loop",
+    )
+
+    ranked, _, notices = candidates.rank(flat, request, CALM, {})
+
+    assert "climb_target_unreachable" in notices
+    assert ranked
+
+
+def test_an_impossible_climb_target_still_ranks_by_which_climbs_most():
+    """Scoring every candidate zero against an unreachable number does not
+    rank them, it only drags them down together and leaves the order to be
+    decided by everything else."""
+    routes = [_hilly(g, 10000.0, 9.19 + i * 0.02)
+              for i, g in enumerate((10.0, 90.0, 40.0))]
+    request = SearchRequest(
+        lat=45.4642, lon=9.19, sport="running", distance_km=10.0,
+        elevation_gain_m=500.0, surface="asphalt", sights="both", mode="loop",
+    )
+
+    ranked, _, _ = candidates.rank(routes, request, CALM, {})
+
+    hilliest = max(ranked, key=lambda r: r.ascent_m)
+    assert hilliest.scores.gain == 1.0
+
+
+def test_an_impossible_request_names_both_compromises():
+    """One route keeps the distance, another comes nearest the climb. Which is
+    which is the reader's call, so both are labelled."""
+    routes = [
+        _hilly(20.0, 10000.0, 9.19),    # right distance, no climb
+        _hilly(120.0, 4000.0, 9.23),    # most climb, far too short
+    ]
+    request = SearchRequest(
+        lat=45.4642, lon=9.19, sport="running", distance_km=10.0,
+        elevation_gain_m=500.0, surface="asphalt", sights="both", mode="loop",
+    )
+
+    ranked, _, notices = candidates.rank(routes, request, CALM, {})
+
+    assert "climb_target_unreachable" in notices
+    by_tag = {tag: r for r in ranked for tag in r.best_for}
+    assert round(by_tag["distance"].distance_m) == 10000
+    assert by_tag["gain"].ascent_m == max(r.ascent_m for r in ranked)
+
+
+def test_a_request_that_can_be_met_labels_nothing():
+    """The labels are a way of explaining a compromise. With nothing to
+    apologise for they would just be decoration."""
+    routes = [_hilly(140.0, 10000.0, 9.19 + i * 0.02) for i in range(2)]
+    # Ask for what these routes actually climb, rather than guessing a number
+    # from the helper's peak-height argument and asserting against the guess.
+    measured = candidates.rank(
+        routes,
+        SearchRequest(lat=45.4642, lon=9.19, sport="running", distance_km=10.0,
+                      surface="asphalt", sights="both", mode="loop"),
+        CALM, {},
+    )[0][0].ascent_m
+    request = SearchRequest(
+        lat=45.4642, lon=9.19, sport="running", distance_km=10.0,
+        elevation_gain_m=measured, surface="asphalt", sights="both", mode="loop",
+    )
+
+    ranked, _, notices = candidates.rank(routes, request, CALM, {})
+
+    assert all(r.best_for == [] for r in ranked)
+    assert not [n for n in notices if "unreachable" in n]

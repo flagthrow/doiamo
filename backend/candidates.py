@@ -339,6 +339,25 @@ def rank(
     shortest_m = min((m.distance_m for m in measured), default=0.0)
     all_ascents = [m.ascent_m for m in measured]
 
+    # A target nothing can meet stops being a target. Asking for 500 m of climb
+    # on the Po plain scores every candidate zero on that axis, which does not
+    # rank them — it just drags all five down equally and leaves the order to
+    # be settled by everything else, silently. So find out first, and if the
+    # ground cannot give what was asked for, rank by which comes closest.
+    gain_unreachable = None      # None, "too_flat" or "too_hilly"
+    if has_gain_target and all_ascents:
+        asked_gain = request.elevation_gain_m or 0.0
+        tolerance = max(60.0, 0.5 * asked_gain)
+        if min(all_ascents) > asked_gain + tolerance:
+            gain_unreachable = "too_hilly"
+        elif max(all_ascents) < asked_gain - tolerance:
+            gain_unreachable = "too_flat"
+
+    distance_unreachable = bool(
+        has_distance_target and measured
+        and min(abs(m.distance_m - target_m) for m in measured) > 0.25 * target_m
+    )
+
     scored: List[Tuple[float, _Measured, RouteScores]] = []
     for item in measured:
         parts = {
@@ -357,11 +376,20 @@ def rank(
             rural = _share_of(item.raw.waytype, config.RURAL_WAYTYPES)
             parts["urban"] = max(0.0, min(1.0, 0.5 + (item.urban_share - rural) / 2.0))
         if "gain" in weights:
-            parts["gain"] = (
-                _gain_score(item.ascent_m, request.elevation_gain_m or 0.0)
-                if has_gain_target
-                else _relative_score(item.ascent_m, all_ascents)
-            )
+            if not has_gain_target:
+                parts["gain"] = _relative_score(item.ascent_m, all_ascents)
+            elif gain_unreachable:
+                # Rank towards what was wanted rather than against a number
+                # nothing here reaches: the hilliest if they asked for climb,
+                # the flattest if they asked to avoid it.
+                parts["gain"] = _relative_score(
+                    item.ascent_m, all_ascents,
+                    lower_is_better=(gain_unreachable == "too_hilly"),
+                )
+            else:
+                parts["gain"] = _gain_score(
+                    item.ascent_m, request.elevation_gain_m or 0.0
+                )
 
         air_score: Optional[float] = None
         if item.air and "european_aqi" in item.air and aqi_hi > aqi_lo:
@@ -393,23 +421,38 @@ def rank(
 
     scored.sort(key=lambda row: row[0], reverse=True)
 
-    # Scoring zero on the one thing that was asked for is not a low score, it
-    # is a failure — and ranking it first anyway, silently, presents it as an
-    # answer. Where there is no flat loop to be had (L'Aquila has hills in
-    # every direction) the honest reply is to say so and show the flattest.
-    if has_gain_target and scored:
-        best_gain = min(item.ascent_m for _, item, _ in scored)
-        asked = request.elevation_gain_m or 0.0
-        if best_gain > asked + max(60.0, 0.5 * asked):
-            notices.append("gain_target_unreachable")
-    if has_distance_target and scored:
-        closest = min(abs(item.distance_m - target_m) for _, item, _ in scored)
-        if closest > 0.25 * target_m:
-            notices.append("distance_target_unreachable")
+    # Missing the one thing that was asked for is not a low score, it is a
+    # failure — and ranking it first anyway, silently, presents it as an answer.
+    if gain_unreachable == "too_hilly":
+        notices.append("gain_target_unreachable")
+    elif gain_unreachable == "too_flat":
+        notices.append("climb_target_unreachable")
+    if distance_unreachable:
+        notices.append("distance_target_unreachable")
+
+    # When both were asked for and one cannot be had, the ranking alone hides
+    # which compromise each route is making. Name the two ends of the trade —
+    # the one that keeps the distance, and the one that comes nearest the climb
+    # — so the choice is the reader's rather than the weighting's.
+    tags: Dict[int, List[str]] = {}
+    if (gain_unreachable or distance_unreachable) and scored:
+        if has_distance_target:
+            index = min(
+                range(len(scored)),
+                key=lambda k: abs(scored[k][1].distance_m - target_m),
+            )
+            tags.setdefault(index, []).append("distance")
+        if has_gain_target:
+            index = (
+                max(range(len(scored)), key=lambda k: scored[k][1].ascent_m)
+                if gain_unreachable != "too_hilly"
+                else min(range(len(scored)), key=lambda k: scored[k][1].ascent_m)
+            )
+            tags.setdefault(index, []).append("gain")
 
     out: List[RouteCandidate] = []
     seen_geometries: List[set] = []
-    for _, item, scores in scored:
+    for position, (_, item, scores) in enumerate(scored):
         cells = _geometry_cells(item.coords)
         if _is_duplicate(cells, seen_geometries):
             continue
@@ -429,6 +472,7 @@ def rank(
                 traffic_exposure=round(item.traffic_exposure, 4),
                 big_road_share=round(item.big_road_share, 4),
                 urban_share=round(item.urban_share, 4),
+                best_for=tags.get(position, []),
                 calories_kcal=round(energy.kcal_for_route(
                     item.coords, request.sport, request.mass_kg,
                     duration_s=item.raw.duration_s,

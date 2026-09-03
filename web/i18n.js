@@ -1,5 +1,7 @@
-// Italian is the default: the first users are in Rome and Milan Facebook
-// groups, where an English-only tool reads as foreign.
+// Italian is the default because the first people to see this are in Italian
+// running and cycling groups, where an English-only tool reads as foreign.
+// That is who is being told about it, not where it works: routing, weather,
+// air and points of interest are all global, and nothing is region-gated.
 const STRINGS = {
   it: {
     headline: "Dove vuoi andare oggi?",
@@ -149,6 +151,10 @@ const STRINGS = {
       "Qui non ci sono percorsi con il dislivello che hai chiesto: sotto trovi i pi\u00f9 piatti.",
     noDistanceOption:
       "Nessun percorso vicino alla distanza che hai chiesto: sotto trovi i pi\u00f9 simili.",
+    noClimbOption:
+      "Qui intorno non c'\u00e8 abbastanza dislivello per quello che hai chiesto. Sotto sono segnati il percorso pi\u00f9 vicino alla distanza e quello che sale di pi\u00f9.",
+    bestForDistance: "distanza giusta",
+    bestForGain: "pi\u00f9 dislivello",
     noRouteOfLength:
       "Da qui non riusciamo a costruire un anello di quella lunghezza. Prova a partire da una via vicina, o a chiedere una distanza diversa.",
     bigRoadWhy:
@@ -325,6 +331,10 @@ const STRINGS = {
       "Nothing here has the climb you asked for \u2014 these are the flattest.",
     noDistanceOption:
       "Nothing came out near the distance you asked for \u2014 these are the closest.",
+    noClimbOption:
+      "There is not that much climb around here. Marked below: the route closest to your distance, and the one that climbs most.",
+    bestForDistance: "right distance",
+    bestForGain: "most climb",
     noRouteOfLength:
       "No loop of that length can be built from here. Try starting from a nearby street, or asking for a different distance.",
     bigRoadWhy:

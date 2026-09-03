@@ -89,6 +89,23 @@ function stored(key, fallback, allowed) {
   return fallback;
 }
 
+// Milan is where this was written, not where it works. The hardcoded centre is
+// only ever a first guess for someone we know nothing about; once a search has
+// happened we know roughly where they are, and opening there beats opening in
+// a city they may never have been to. Coarse on purpose — two decimals is
+// about a kilometre, enough to frame a map and not a record of anybody's
+// address.
+function lastPlace() {
+  const lat = storedNumber("doiamo_lat", -90, 90);
+  const lon = storedNumber("doiamo_lon", -180, 180);
+  return lat !== null && lon !== null ? [lat, lon] : null;
+}
+
+function rememberPlace(lat, lon) {
+  remember("doiamo_lat", lat.toFixed(2));
+  remember("doiamo_lon", lon.toFixed(2));
+}
+
 // localStorage only holds strings, and a body mass has to come back a number
 // or every calorie estimate silently becomes NaN.
 function storedNumber(key, low, high) {
@@ -107,8 +124,13 @@ function remember(key, value) {
 
 state.mapStyle = stored("doiamo_map_style", "clean", STYLE_ORDER);
 
+// Somewhere to stand before anyone has told us anything. Every path that
+// learns better — a remembered search, a geolocation fix, a named place —
+// overrides it.
+const DEFAULT_CENTRE = [45.4642, 9.19];
+
 const map = L.map("map", { zoomControl: true, attributionControl: true })
-  .setView([45.4642, 9.19], 13);
+  .setView(DEFAULT_CENTRE, 13);
 
 let basemapLayers = [];
 
@@ -237,7 +259,7 @@ function initHeroMap() {
     boxZoom: false,
     keyboard: false,
     tap: false,
-  }).setView([45.4705, 9.1830], 13);
+  }).setView(lastPlace() || DEFAULT_CENTRE, 13);
 
   [
     ESRI + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
@@ -1031,6 +1053,16 @@ function renderResults() {
     sub.textContent = describeRoute(route);
     main.append(title, sub);
 
+    // Where the request could not be met in full, say what this route is the
+    // best answer to, so picking between compromises is the reader's call.
+    (route.best_for || []).forEach((what) => {
+      const tag = document.createElement("span");
+      tag.className = "best-for";
+      tag.textContent = what === "distance" ? t("bestForDistance") : t("bestForGain");
+      sub.append(" ");
+      sub.appendChild(tag);
+    });
+
     head.append(rank, main, scoreRing(route.scores.total));
 
     const bars = document.createElement("div");
@@ -1458,6 +1490,7 @@ async function search() {
     area: state.area,
     mass_kg: state.massKg,
   };
+  rememberPlace(state.start.lat, state.start.lon);
   body.elevation_gain_m = state.gainAny ? null : state.gainM;
   if (state.mode === "loop") {
     body.distance_km = state.distanceKm;
@@ -1497,6 +1530,7 @@ async function search() {
     if (notices.includes("alternatives_unavailable")) notes.push(t("altsUnavailable"));
     if (notices.includes("busy_roads_only")) notes.push(t("busyRoadsOnly"));
     if (notices.includes("gain_target_unreachable")) notes.push(t("noFlatOption"));
+    if (notices.includes("climb_target_unreachable")) notes.push(t("noClimbOption"));
     if (notices.includes("distance_target_unreachable")) notes.push(t("noDistanceOption"));
     if (notices.includes("no_route_of_that_length")) notes.push(t("noRouteOfLength"));
     message(notes.join(" "), notes.length ? "warn" : "");
@@ -1584,9 +1618,10 @@ const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 let askTyper = null;
 
-// The hero map opens on Milan. Taking that centre and calling it "da dove sei
-// ora" was a claim, and a false one for everyone who is not in Milan — so ask
-// the browser where you actually are, and say plainly when it would not tell.
+// The hero map opens on the last place searched, or on a default centre for
+// someone brand new. Taking that centre and calling it "da dove sei ora" was a
+// claim, and a false one for anyone it did not happen to describe — so ask the
+// browser where you actually are, and say plainly when it would not tell.
 // A browser with no GPS and no known Wi-Fi around it falls back to locating
 // you by IP address, and reports that as a position like any other — which is
 // how someone in Italy is told they are in Germany. The giveaway is always
