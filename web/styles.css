@@ -487,7 +487,17 @@ button.primary:disabled { opacity: .6; cursor: progress; filter: none; transform
   font-size: 12.5px; line-height: 1.5; padding: 11px 13px; border-radius: var(--r-md);
   background: var(--accent-wash); color: var(--ink-2); border: 1px solid transparent;
 }
-.notice.warn { background: transparent; border-color: var(--line-strong); color: var(--ink-2); }
+/* A transparent box in body-text grey is a caption, not a warning: the notice
+   saying no route here has the climb you asked for sat directly above the
+   results looking exactly like the footnote about air quality, and got read as
+   boilerplate. Amber, and marked down the edge, like every other "this is not
+   what you asked for" in the interface. */
+.notice.warn {
+  background: var(--warn-wash); color: var(--warn);
+  border-color: transparent; border-left: 3px solid var(--warn);
+  border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+  font-weight: 500;
+}
 #messages:empty { display: none; }
 .panel #messages .notice { margin-top: -2px; }
 
