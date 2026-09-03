@@ -10,6 +10,10 @@ const state = {
   surface: "asphalt",
   sights: "both",
   area: "any",     // "urban" when the sentence asked to stay in town
+  // Body mass is the biggest unknown in a calorie estimate, so it is
+  // remembered once told and shown as a guess until then.
+  massKg: storedNumber("doiamo_mass", 30, 250),
+  massAssumed: true,
   // Which cards the reader opened, so a re-render does not fold them again.
   expanded: {},
   distanceKm: 10,
@@ -83,6 +87,14 @@ function stored(key, fallback, allowed) {
     /* private browsing */
   }
   return fallback;
+}
+
+// localStorage only holds strings, and a body mass has to come back a number
+// or every calorie estimate silently becomes NaN.
+function storedNumber(key, low, high) {
+  const raw = stored(key, null);
+  const value = Number(raw);
+  return raw && Number.isFinite(value) && value >= low && value <= high ? value : null;
 }
 
 function remember(key, value) {
@@ -1032,6 +1044,17 @@ function renderResults() {
                                 : paved + "% " + t("paved")
     ));
 
+    // What it costs to cover. An estimate, and the bar is relative to the
+    // other candidates because "how many calories is a lot" has no answer.
+    if (route.calories_kcal) {
+      const most = Math.max.apply(null, state.routes.map((r) => r.calories_kcal || 0));
+      bars.appendChild(bar(
+        t("scoreCalories"),
+        most > 0 ? route.calories_kcal / most : 0,
+        Math.round(route.calories_kcal) + " kcal"
+      ));
+    }
+
     // Traffic: metres beside fast roads, which is the thing you can act on.
     bars.appendChild(bar(
       t("scoreTraffic"), route.scores.traffic,
@@ -1225,6 +1248,17 @@ function applyIntent(data) {
   // not a preference that should outlive it.
   state.area = data.area || "any";
 
+  // A calorie target is a distance we worked out, not one they gave, and the
+  // body it assumed is the biggest thing that could make it wrong.
+  state.calories = data.calories || null;
+  state.massAssumed = !!data.mass_assumed;
+  if (data.mass_kg && !data.mass_assumed) {
+    state.massKg = data.mass_kg;
+    remember("doiamo_mass", data.mass_kg);
+  } else if (data.mass_kg) {
+    state.massKg = state.massKg || data.mass_kg;
+  }
+
   if (data.start) setPoint("start", data.start.lat, data.start.lon, data.start.label, false);
   if (data.end) setPoint("end", data.end.lat, data.end.lon, data.end.label, false);
 
@@ -1320,6 +1354,7 @@ async function askSearch() {
         lang: getLang(),
         lat: bias.lat,
         lon: bias.lon,
+        mass_kg: state.massKg,
       }),
     });
     if (!response.ok) {
@@ -1329,6 +1364,12 @@ async function askSearch() {
     const data = await response.json();
     applyIntent(data);
     showChips(data);
+    // The calorie target rests on a body mass nobody gave us. Say so, and let
+    // one tap fix it, rather than printing a number that only looks precise.
+    if (state.calories && state.massAssumed) {
+      // The calories are what they asked for; the body is what we made up.
+      addGuessChip("70 kg", askForMass, t("assumedMass"));
+    }
     if (state.assumedSport) {
       addGuessChip(t(state.sport), () => {
         state.sport = state.sport === "running" ? "cycling" : "running";
@@ -1409,6 +1450,7 @@ async function search() {
     surface: state.surface,
     sights: state.sights,
     area: state.area,
+    mass_kg: state.massKg,
   };
   body.elevation_gain_m = state.gainAny ? null : state.gainM;
   if (state.mode === "loop") {
@@ -1483,6 +1525,21 @@ function canShareFiles() {
   } catch (err) {
     return false;
   }
+}
+
+function askForMass() {
+  const current = state.massKg || 70;
+  const said = window.prompt(t("askMass"), String(current));
+  if (said === null) return;
+  const value = Number(said.replace(",", "."));
+  if (!Number.isFinite(value) || value < 30 || value > 250) {
+    message(t("massRange"), "warn", true);
+    return;
+  }
+  state.massKg = Math.round(value);
+  state.massAssumed = false;
+  remember("doiamo_mass", state.massKg);
+  askSearch();
 }
 
 async function shareGpx(route, button) {

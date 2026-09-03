@@ -9,7 +9,7 @@ import hashlib
 import random
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import config, geo
+from . import config, energy, geo
 from .health import grid_key
 from .models import (
     AirContext,
@@ -429,6 +429,10 @@ def rank(
                 traffic_exposure=round(item.traffic_exposure, 4),
                 big_road_share=round(item.big_road_share, 4),
                 urban_share=round(item.urban_share, 4),
+                calories_kcal=round(energy.kcal_for_route(
+                    item.coords, request.sport, request.mass_kg,
+                    duration_s=item.raw.duration_s,
+                ), 0),
                 headwind_share=round(item.headwind_share, 4),
                 step_distance_m=round(item.step_distance_m, 1),
                 surface_breakdown=_breakdown(item.raw.surface, config.SURFACE_LABELS),

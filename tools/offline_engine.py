@@ -15,6 +15,7 @@ import math
 import random
 from typing import List, Optional, Sequence, Tuple
 
+from backend import geo
 from backend.routing.base import RawRoute, RoutingEngine
 
 # Surface and waytype mixes that read like different kinds of city route.
@@ -33,6 +34,11 @@ WAYTYPE_MIXES = [
 ]
 
 BLOCK_M = 110.0     # rough city block, the step the staircase moves in
+
+# Squaring a smooth line off into axis-aligned blocks lengthens it: averaged
+# over all headings, |cos| + |sin| comes to 4/pi. The outline is drawn short
+# by that factor so the route that comes out is the length that was asked for.
+STAIRCASE_STRETCH = 4.0 / math.pi
 
 
 def _staircase(
@@ -123,7 +129,9 @@ class OfflineEngine(RoutingEngine):
         for i, _ in enumerate(seeds[:8]):
             distance = length_m * rng.uniform(0.9, 1.12)
             coords = _with_elevation(
-                _staircase(_loop_outline(lat, lon, distance, i), lat),
+                _staircase(
+                    _loop_outline(lat, lon, distance / STAIRCASE_STRETCH, i), lat
+                ),
                 rng.uniform(15, 90),
             )
             routes.append(self._raw(coords, distance, i))
@@ -153,6 +161,13 @@ class OfflineEngine(RoutingEngine):
 
     @staticmethod
     def _raw(coords, distance_m: float, index: int) -> RawRoute:
+        # The staircase adds a third again to the line it is drawn from, and
+        # reporting the length we asked for rather than the one we produced
+        # made every derived figure disagree with the geometry — calories read
+        # 1.27 kcal/kg/km where the real cost of running is 0.96, and the
+        # distance scoring was being marked against a number that was not the
+        # route. A real router reports what it actually returns; so does this.
+        distance_m = geo.total_distance_m(coords)
         surface = SURFACE_MIXES[index % len(SURFACE_MIXES)]
         waytype = WAYTYPE_MIXES[index % len(WAYTYPE_MIXES)]
         return RawRoute(

@@ -28,6 +28,8 @@ class SearchRequest(BaseModel):
     surface: str = Field("asphalt")
     # Monuments or greenery is a preference, not a measure of quality.
     sights: str = Field("both")
+    # Only used to estimate what each route costs to cover.
+    mass_kg: Optional[float] = Field(None, ge=30, le=250)
     # "any" unless they asked to stay in town, which is a constraint on where
     # the route goes rather than on what it is paved with.
     area: str = Field("any")
@@ -86,6 +88,8 @@ class RouteCandidate(BaseModel):
     # Share of the route on residential streets and pavements — the proxy for
     # being in a built-up area at all.
     urban_share: float = 0.0
+    # An estimate, and the body mass behind it is the biggest unknown in it.
+    calories_kcal: float = 0.0
     # Share of the route's length on state or trunk roads. Separate from the
     # weighted exposure score because a badge needs a fraction of metres, not a
     # ranking term.
@@ -165,6 +169,9 @@ class InterpretRequest(BaseModel):
     # Bias place lookup towards what the map is showing.
     lat: Optional[float] = None
     lon: Optional[float] = None
+    # What the browser remembers about the reader, so "burn 400 calories" can
+    # be turned into a distance. Body mass is most of that answer.
+    mass_kg: Optional[float] = Field(None, ge=30, le=250)
 
 
 class InterpretResponse(BaseModel):
@@ -177,6 +184,11 @@ class InterpretResponse(BaseModel):
     surface: Optional[str] = None
     sights: Optional[str] = None
     area: Optional[str] = None
+    # Echoed back so the interface can show what it aimed at and whose body it
+    # assumed, rather than presenting a derived distance as if it were asked for.
+    calories: Optional[float] = None
+    mass_kg: Optional[float] = None
+    mass_assumed: bool = False
     start: Optional["GeocodeResult"] = None
     end: Optional["GeocodeResult"] = None
     # Named but not found, so the interface can say so rather than ignore it.

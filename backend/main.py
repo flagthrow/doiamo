@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import candidates, config, geo, health, intent as intent_reader, poi
+from . import candidates, config, energy, geo, health, intent as intent_reader, poi
 from .geocoding import PhotonGeocoder
 from . import poi_store as poi_store_module
 from .poi_store import LocalPoiStore, ensure_downloaded
@@ -338,6 +338,19 @@ async def interpret(request: InterpretRequest) -> InterpretResponse:
 
     resolved, unresolved = await locate(parsed)
 
+    # "Burn 400 calories" is a distance nobody has worked out yet. Turning it
+    # into one needs a body mass, which is the largest unknown in the answer —
+    # so whether it was told to us or assumed travels back with the number.
+    mass_assumed = parsed.mass_kg is None and request.mass_kg is None
+    mass_kg = energy.clamp_mass(parsed.mass_kg or request.mass_kg)
+    distance_km = parsed.distance_km
+    if parsed.calories and distance_km is None:
+        distance_km = energy.distance_km_for_kcal(
+            parsed.calories, parsed.sport or "running", mass_kg,
+            ascent_m=parsed.elevation_gain_m,
+        )
+        parsed = parsed.model_copy(update={"distance_km": distance_km})
+
     # The rules can extract a string that is not a place: "starting from the
     # fontana di trevi at Rome" gave them "the fontana di trevi at rome",
     # which geocodes to nothing. Worse, having produced *a* string they looked
@@ -369,6 +382,9 @@ async def interpret(request: InterpretRequest) -> InterpretResponse:
         surface=parsed.surface,
         sights=parsed.sights,
         area=parsed.area,
+        calories=parsed.calories,
+        mass_kg=mass_kg if parsed.calories else None,
+        mass_assumed=mass_assumed if parsed.calories else False,
         start=resolved["start"],
         end=resolved["end"],
         unresolved=unresolved,

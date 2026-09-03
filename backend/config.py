@@ -126,6 +126,11 @@ RURAL_WAYTYPES = (1, 2, 5)      # state road, road, track
 
 AREAS: List[str] = ["any", "urban"]
 
+# Rough pace, used where no route timing exists yet — turning "un'ora" into a
+# distance, and estimating what a distance costs to cover.
+KMH_RUNNING = 10.0
+KMH_CYCLING = 20.0
+
 # How much of the ranking "stay in town" takes over. Enough to reorder the
 # candidates, not so much that it outvotes the distance you asked for.
 URBAN_WEIGHT = float(os.environ.get("URBAN_WEIGHT", "0.22"))

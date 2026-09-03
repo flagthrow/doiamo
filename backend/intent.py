@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
+from . import config
 from .cache import TTLCache
 from .intent_store import IntentStore
 
@@ -119,7 +120,7 @@ URBAN_PATTERNS = [
 ]
 
 # Rough pace, for turning "un'ora" into a distance.
-KMH = {"running": 10.0, "cycling": 20.0}
+KMH = {"running": config.KMH_RUNNING, "cycling": config.KMH_CYCLING}
 
 DEFAULT_SPORT = "running"
 
@@ -133,6 +134,8 @@ NUMBER_WORDS = {
 
 class Intent(BaseModel):
     area: Optional[str] = None
+    calories: Optional[float] = None
+    mass_kg: Optional[float] = None
     sport: Optional[str] = None
     mode: Optional[str] = None
     distance_km: Optional[float] = None
@@ -245,6 +248,36 @@ NOT_A_PLACE = {
     "salita", "discesa", "mezzo", "zona", "centro", "periferia", "bici",
     "city", "town", "nature", "hills", "park", "the city", "the park",
 }
+
+
+def _calories(text: str) -> Optional[float]:
+    """"bruciare 400 calorie". A number that is not attached to the word is
+    not a calorie count — 400 on its own is far more likely to be metres."""
+    match = re.search(
+        r"(\d{2,5})\s*(?:kcal|cal\b|calorie|caloria|calories|chilocalorie)", text
+    )
+    if not match:
+        match = re.search(
+            r"(?:brucia\w*|consuma\w*|burn(?:ing)?|smaltire)\s+(?:\S+\s+){0,2}?(\d{2,5})",
+            text,
+        )
+    if not match:
+        return None
+    value = float(match.group(1))
+    # A run that burns 30 kcal or 20000 is not a run.
+    return value if 50.0 <= value <= 10000.0 else None
+
+
+def _mass(text: str) -> Optional[float]:
+    """"peso 82 kg". Only where it is said outright — guessing someone's body
+    mass from anything else would be both wrong and rude."""
+    match = re.search(r"(\d{2,3})\s*(?:kg|chil[io]|kilos?|kilograms?)\b", text)
+    if not match:
+        match = re.search(r"\b(?:peso|pesa|weigh|weighing)\s+(\d{2,3})\b", text)
+    if not match:
+        return None
+    value = float(match.group(1))
+    return value if 30.0 <= value <= 250.0 else None
 
 
 def _fitness(text: str) -> str:
@@ -423,6 +456,8 @@ def read_detailed(sentence: str) -> Tuple[Intent, bool]:
 
     return Intent(
         area=_area(rest),
+        calories=_calories(rest),
+        mass_kg=_mass(rest),
         sport=sport,
         mode=mode,
         distance_km=distance,
@@ -457,6 +492,10 @@ def summarise(intent: Intent, language: str = "it") -> List[str]:
             out.append("un po' di dislivello" if it else "some climbing")
         else:
             out.append("molto dislivello" if it else "lots of climbing")
+    if intent.calories:
+        # What they asked for. The kilometres below are our arithmetic, not
+        # their request, and showing only those would hide the substitution.
+        out.append("{:.0f} kcal".format(intent.calories))
     if intent.area == "urban":
         out.append("in citta" if it else "in town")
     if intent.surface:
