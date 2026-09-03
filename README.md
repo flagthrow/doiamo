@@ -282,20 +282,25 @@ extracted once instead:
 ```bash
 ./.venv/bin/pip install -r requirements-tools.txt          # pyosmium
 mkdir -p data && cd data
-curl -O https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf   # Milan
-curl -O https://download.geofabrik.de/europe/italy/centro-latest.osm.pbf       # Rome
+for R in nord-ovest nord-est centro sud isole; do
+  curl -O "https://download.geofabrik.de/europe/italy/$R-latest.osm.pbf"
+done
 cd ..
-./.venv/bin/python -m tools.build_poi_db data/pois.sqlite \
-    data/nord-ovest-latest.osm.pbf data/centro-latest.osm.pbf
+./.venv/bin/python -m tools.build_poi_db data/pois.sqlite data/*.osm.pbf
 ```
+
+Italy comes as five regional extracts rather than one national file, and taking
+them separately is deliberate: the builder holds a node-location index per
+file, so peak memory follows the largest region instead of the whole country.
 
 `pyosmium` is in `requirements-tools.txt`, not `requirements.txt`: it needs a
 build toolchain and has no business in a deployment image.
 
 Several extracts go into one database, each keeping its own coverage. North-west
-Italy alone is **139,485 POIs in 19 MB**, about 13 minutes to build. Re-run it
-when you want fresher data; drinking fountains do not move weekly. `data/` is
-gitignored — the database is rebuildable, not source.
+Italy alone is **139,485 POIs in 19 MB**, about 13 minutes to build; the whole
+country is roughly an hour. Re-run it when you want fresher data; drinking
+fountains do not move weekly. `data/` is gitignored — the database is
+rebuildable, not source.
 
 **Coverage is a grid of cells that hold data, not a bounding box.** A box cannot
 describe a region: the north-west extract's rectangle spans Bologna, Verona and
