@@ -720,6 +720,16 @@ footer p { margin: 0 0 5px; }
 
 /* A route that misses the thing you asked for says so on the row itself,
    rather than leaving a zero-length bar to be interpreted. */
+/* "Did you find what you were looking for?" — a question, not a banner, so it
+   sits quietly under the last result rather than shouting between them. */
+.retry {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 10px; padding: 16px; margin-top: 4px;
+  border: 1px dashed var(--line-strong); border-radius: var(--r-md);
+  background: var(--card);
+}
+.retry p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
 /* The fold. A quiet full-width row rather than a button that competes with
    the two real actions inside it. */
 .details-toggle {

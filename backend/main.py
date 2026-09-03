@@ -316,19 +316,49 @@ async def interpret(request: InterpretRequest) -> InterpretResponse:
     used_model = intent_reader.USAGE["calls"] > calls_before
 
     near = (request.lat, request.lon) if request.lat is not None else None
-    resolved: Dict[str, Optional[GeocodeResult]] = {"start": None, "end": None}
-    unresolved: List[str] = []
-    for field, text in (("start", parsed.start_text), ("end", parsed.end_text)):
-        if not text:
-            continue
-        try:
-            hits = await app.state.geocoder.search(text, near=near, prefer_place=True)
-        except Exception:
-            hits = []
-        if hits:
-            resolved[field] = GeocodeResult(**hits[0])
-        else:
-            unresolved.append(text)
+
+    async def locate(intent):
+        """Geocode whatever this reading called a place."""
+        found: Dict[str, Optional[GeocodeResult]] = {"start": None, "end": None}
+        missing: List[str] = []
+        for field, text in (("start", intent.start_text), ("end", intent.end_text)):
+            if not text:
+                continue
+            try:
+                hits = await app.state.geocoder.search(
+                    text, near=near, prefer_place=True
+                )
+            except Exception:
+                hits = []
+            if hits:
+                found[field] = GeocodeResult(**hits[0])
+            else:
+                missing.append(text)
+        return found, missing
+
+    resolved, unresolved = await locate(parsed)
+
+    # The rules can extract a string that is not a place: "starting from the
+    # fontana di trevi at Rome" gave them "the fontana di trevi at rome",
+    # which geocodes to nothing. Worse, having produced *a* string they looked
+    # confident, so the model was never asked — and the model reads that
+    # sentence correctly. A name that does not resolve is a gap like any
+    # other, so spend the call and try again.
+    if unresolved and not used_model:
+        guess = intent_reader.ask_model(request.sentence)
+        if guess is not None:
+            used_model = True
+            merged = parsed.model_dump()
+            for field in ("start_text", "end_text"):
+                value = getattr(guess, field)
+                if value and value != merged.get(field):
+                    merged[field] = value
+            retry = intent_reader.Intent(**merged)
+            if retry.start_text != parsed.start_text or retry.end_text != parsed.end_text:
+                second, still_missing = await locate(retry)
+                # Only keep the model's reading if it actually found something.
+                if any(second.values()):
+                    parsed, resolved, unresolved = retry, second, still_missing
 
     return InterpretResponse(
         understood=intent_reader.summarise(parsed, request.lang),

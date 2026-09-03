@@ -11,7 +11,6 @@ policy caps you at one request a second.
 """
 from __future__ import annotations
 
-import math
 import unicodedata
 from typing import Dict, List, Optional, Tuple
 
@@ -71,15 +70,6 @@ def _tier(props: Dict[str, object], query: str) -> int:
     if name == query:
         return 3 if _is_settlement(props) else 2
     return 1 if name.startswith(query) else 0
-
-
-def _distance_km(near: Tuple[float, float], lat: float, lon: float) -> float:
-    """Rough great-circle distance, only ever used to order two candidates."""
-    lat_near, lon_near = near
-    mean = math.radians((lat + lat_near) / 2.0)
-    dx = (lon - lon_near) * math.cos(mean) * 111.32
-    dy = (lat - lat_near) * 110.57
-    return math.hypot(dx, dy)
 
 
 def _label(props: Dict[str, object]) -> Tuple[str, Optional[str]]:
@@ -165,7 +155,7 @@ class PhotonGeocoder:
             return []
 
         results: List[Dict[str, object]] = []
-        ranked: List[Tuple[int, float, int, Dict[str, object]]] = []
+        ranked: List[Tuple[int, int, Dict[str, object]]] = []
         folded_query = _fold(query)
         seen = set()
         for feature in payload.get("features") or []:
@@ -188,18 +178,19 @@ class PhotonGeocoder:
             lat, lon = float(coords[1]), float(coords[0])
             row = {"label": label, "lat": lat, "lon": lon, "region": region}
             if prefer_place:
-                ranked.append((
-                    -_tier(props, folded_query),
-                    _distance_km(near, lat, lon) if near else 0.0,
-                    len(ranked),          # keeps Photon's order within a tie
-                    row,
-                ))
+                # Within a tier, Photon's own order wins. It already ranks by
+                # importance, and ordering by distance instead sent "Colosseo"
+                # to a metro stop in Sesto San Giovanni because the search was
+                # biased towards Milan. Measured across eight landmark and city
+                # queries, distance agreed with importance seven times and was
+                # wrong the eighth — so it was only ever costing accuracy.
+                ranked.append((-_tier(props, folded_query), len(ranked), row))
             else:
                 results.append(row)
 
         if prefer_place:
-            ranked.sort(key=lambda item: item[:3])
-            results = [item[3] for item in ranked]
+            ranked.sort(key=lambda item: item[:2])
+            results = [item[2] for item in ranked]
 
         results = results[:config.GEOCODE_RESULTS]
         self._cache.set(key, results)

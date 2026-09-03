@@ -315,12 +315,29 @@ def _places(text: str) -> Dict[str, Optional[str]]:
     """
     def clean(value: str) -> Optional[str]:
         value = value.strip(" ,.;:!?").strip()
+        # "starting from THE fontana di trevi" — the article is ours, not part
+        # of the name, and Photon returns nothing at all for "the fontana di
+        # trevi" while "fontana di trevi" finds it immediately.
+        value = re.sub(r"^(?:the|il|lo|la|l'|i|gli|le|un|una|uno)\s+", "", value)
+        value = value.strip(" ,.;:!?").strip()
         if not value or value in NOT_A_PLACE or len(value) < 3:
             return None
         return value
 
+    # Italian glues the article to the preposition — da, dal, dalla, dallo,
+    # dall'. Matching only bare "da" turned "partendo dal Parco Sempione" into
+    # the place name "l parco sempione", which geocodes to nothing; "dal
+    # Colosseo" only survived because Photon is forgiving.
+    # The separator is part of the token: "dall'Arco" has no space after the
+    # apostrophe, so a pattern expecting one misses it entirely.
+    da = r"(?:d(?:a|al|alla|allo|ai|agli|alle)\s+|dall'\s*)"
+    a_to = (r"(?:fino\s+a(?:l|lla|llo)?\s+|verso(?:\s+i[l]?|\s+la)?\s+"
+            r"|a(?:l|lla|llo|i|gli|lle)?\s+|all'\s*)")
+
     tail = r"(?:$|,|\.| e | in | con | ma | per )"
-    pair = re.search(r"\bda (?:casa |qui )?(.+?) (?:a|fino a|verso) (.+?)" + tail, text)
+    pair = re.search(
+        r"\b" + da + r"(?:casa |qui )?(.+?)\s+" + a_to + r"(.+?)" + tail, text
+    )
     if pair:
         start, end = clean(pair.group(1)), clean(pair.group(2))
         if start and end:
@@ -332,10 +349,14 @@ def _places(text: str) -> Dict[str, Optional[str]]:
         if start and end:
             return {"start_text": start, "end_text": end}
 
-    stop = r"(?:$|,|\.| e | tra | fra | con | ma | per | in | and | with | among | through )"
+    # " at " ends a place name as surely as " in " does: without it, "starting
+    # from the fontana di trevi at rome" was captured whole and geocoded to
+    # nothing. The city is not lost — it is what the search is biased towards.
+    stop = (r"(?:$|,|\.| e | tra | fra | con | ma | per | in "
+            r"| and | with | among | through | at | for )")
     start = None
-    for pattern in (r"\bparto da (.+?)" + stop,
-                    r"\bpartendo da (.+?)" + stop,
+    for pattern in (r"\bparto\s+" + da + r"(.+?)" + stop,
+                    r"\bpartendo\s+" + da + r"(.+?)" + stop,
                     r"\bvicino (?:a|al|alla|ai|alle|allo) (.+?)" + stop,
                     r"\bzona (.+?)" + stop,
                     r"\bstarting (?:from|at) (.+?)" + stop,

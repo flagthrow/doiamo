@@ -588,6 +588,7 @@ function showApp() {
   renderSummary();
   updateMapHint();
   stopAskTypewriter();
+  document.getElementById("retry").hidden = false;
 }
 
 // The map is opened deliberately rather than shown alongside: on a phone it
@@ -1693,6 +1694,14 @@ function wireEverything() {
     revealForm(document.getElementById("heroSlot").hidden);
   });
   document.getElementById("newSearch").addEventListener("click", showHome);
+  // Straight into the precise controls, already filled in with what the
+  // sentence was understood to mean — so it is a correction, not a restart.
+  document.getElementById("retryAdvanced").addEventListener("click", () => {
+    const slot = document.getElementById("sidebarSlot");
+    slot.hidden = false;
+    moveControls("sidebarSlot");
+    document.getElementById("summary").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   document.getElementById("mapClose").addEventListener("click", closeMap);
   document.getElementById("editSearch").addEventListener("click", () => {
     const slot = document.getElementById("sidebarSlot");

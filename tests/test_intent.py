@@ -613,3 +613,33 @@ def test_a_named_place_is_never_thin_whatever_the_distance():
 ])
 def test_a_diminutive_names_the_activity_as_well_as_its_size(sentence, sport):
     assert read(sentence).sport == sport
+
+
+# --- Italian glues its articles to its prepositions -------------------------
+
+@pytest.mark.parametrize("sentence,start,end", [
+    ("10 km partendo dal Parco Sempione", "parco sempione", None),
+    ("partendo dalla Stazione Centrale", "stazione centrale", None),
+    ("parto dall'Arco della Pace", "arco della pace", None),
+    ("dal Duomo alla Stazione Centrale", "duomo", "stazione centrale"),
+    ("dal Colosseo all'Altare della Patria", "colosseo", "altare della patria"),
+    ("da Milano fino a Monza", "milano", "monza"),
+    ("da casa verso il Parco Nord", "casa", "parco nord"),
+])
+def test_articled_prepositions_still_find_the_place(sentence, start, end):
+    """"partendo dal Parco Sempione" was read as the place "l parco sempione",
+    which geocodes to nothing; "dall'Arco" has no space to split on at all."""
+    parsed = read(sentence)
+    assert parsed.start_text == start
+    assert parsed.end_text == end
+
+
+def test_an_article_is_not_part_of_the_name():
+    """Photon returns nothing for "the fontana di trevi" and finds it at once
+    for "fontana di trevi"."""
+    assert read("I want to run starting from the fontana di trevi at Rome"
+                ).start_text == "fontana di trevi"
+
+
+def test_a_trailing_city_does_not_swallow_the_landmark():
+    assert read("starting at Hyde Park in London").start_text == "hyde park"

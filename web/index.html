@@ -98,6 +98,15 @@
 
       <div class="context" id="context" hidden></div>
       <div class="results" id="results"></div>
+
+      <!-- The sentence got you close or it did not. Saying so out loud is the
+           only way anyone finds the controls that would fix it. -->
+      <div class="retry" id="retry" hidden>
+        <p data-i18n="retryAsk"></p>
+        <button class="ghost-btn" type="button" id="retryAdvanced"
+                data-i18n="tryAdvanced"></button>
+      </div>
+
       <footer>
         <p class="disclaimer" data-i18n="disclaimer"></p>
         <p data-i18n="footer"></p>

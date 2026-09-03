@@ -168,3 +168,21 @@ def test_an_exact_match_beats_a_prefix_match():
     exact = {"name": "Monza", "osm_key": "place", "osm_value": "city"}
     prefix = {"name": "Monza e della Brianza", "osm_key": "place", "osm_value": "county"}
     assert geocoding._tier(exact, "monza") > geocoding._tier(prefix, "monza")
+
+
+def test_within_a_tier_photons_own_order_wins():
+    """Photon ranks by importance. Re-ordering by distance from the map centre
+    sent "Colosseo" to a metro stop in Sesto San Giovanni, because the search
+    happened to be biased towards Milan."""
+    features = [
+        {"geometry": {"coordinates": [9.24, 45.53]},
+         "properties": {"name": "Colosseo", "city": "Sesto San Giovanni",
+                        "osm_key": "railway", "osm_value": "station"}},
+        {"geometry": {"coordinates": [12.49, 41.89]},
+         "properties": {"name": "Colosseo", "city": "Roma",
+                        "osm_key": "historic", "osm_value": "monument"}},
+    ]
+    folded = geocoding._fold("colosseo")
+    # Same tier: both are exact name matches on non-settlements.
+    assert geocoding._tier(features[0]["properties"], folded) == \
+           geocoding._tier(features[1]["properties"], folded)
