@@ -1,0 +1,54 @@
+# Sentences that broke something. Every line here is a bug somebody hit, kept
+# so it cannot come back quietly. Hand-written on purpose: a generated corpus
+# covers breadth and misses exactly these — it had five "fuori citta" sentences
+# and not the one that matters, because only "stare fuori citta" trips the
+# urban pattern that the negation guard exists to stop.
+
+# negation traps: the word that means the opposite contains the word
+voglio stare fuori citta
+non sono allenato, voglio un giro corto
+sono ben allenato, voglio un giro corto in bici
+fammi fare una corsetta intorno a l'aquila con un po' di dislivello
+
+# a place named in a way the rules did not know
+I want to run starting from the fontana di trevi at Rome
+10 km partendo dal Parco Sempione
+parto dall'Arco della Pace
+voglio correre partendo dal Colosseo
+dal Duomo alla Stazione Centrale
+voglio fare una corsetta nel centro di bologna con 800mt di dislivello
+un giro nel centro storico di Firenze
+una corsa intorno a Bologna
+corsetta intorno al Duomo
+nei dintorni di Como
+downtown Chicago
+a run around Hyde Park
+
+# "lungo" is both long and along
+un giro in bici lungo il fiume
+un giro lungo in bici
+una corsa lungo l'Adige
+a run along the canal
+
+# a stated number is not a tier
+voglio fare un giro in bici a bologna con 800mt di dislivello
+un giro con 1200 m di salita
+dislivello di 450 metri
+un giro di 800 metri
+voglio correre 10 km con 500 metri di dislivello
+
+# where, not what it is paved with
+voglio correre 10k poco dislivello e voglio rimanere in citta
+voglio correre in centro
+un giro intorno a me
+portami fuori citta domattina, qualcosa di lungo e in salita
+
+# calories, and the body they depend on
+voglio andare a correre e bruciare 400 calorie
+peso 82 kg e voglio bruciare 500 calorie correndo
+un giro in bici da 600 kcal
+
+# nothing much said at all
+consigliami un bel giro tranquillo
+vorrei sgranchirmi le gambe senza allontanarmi troppo da casa
+una corsetta qui vicino
