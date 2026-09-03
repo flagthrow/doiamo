@@ -369,3 +369,26 @@ def test_a_spent_quota_on_the_extra_search_does_not_lose_the_results(client):
 
     assert data["routes"]
     assert "stretched_alternative" not in data["notices"]
+
+
+def test_a_runner_is_never_offered_an_ultra_as_the_alternative(client):
+    """Bologna's climb is real at 70 km, and a 70 km run is not an alternative
+    to a 30 km one — past a point the honest answer stops being a longer route
+    and becomes a different sport."""
+    client.app.state.engine = TerrainEngine()
+
+    client.post("/api/search", json=search_body(
+        distance_km=30, elevation_gain_m=1500, sport="running"))
+
+    lengths = [call[2] for call in client.app.state.engine.calls]
+    assert max(lengths) <= main.config.STRETCH_MAX_KM["running"] * 1000
+
+
+def test_a_cyclist_is_allowed_much_further(client):
+    client.app.state.engine = TerrainEngine()
+
+    client.post("/api/search", json=search_body(
+        distance_km=60, elevation_gain_m=3000, sport="cycling"))
+
+    lengths = [call[2] for call in client.app.state.engine.calls]
+    assert max(lengths) > main.config.STRETCH_MAX_KM["running"] * 1000

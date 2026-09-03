@@ -245,7 +245,8 @@ async def _stretched_alternative(query, weather, air_by_cell):
     search down with it. This is a bonus answer, not the answer.
     """
     asked_km = query.distance_km or 0.0
-    longer_km = min(asked_km * config.STRETCH_FACTOR, config.STRETCH_MAX_KM)
+    ceiling = config.STRETCH_MAX_KM.get(query.sport, config.STRETCH_MAX_KM["running"])
+    longer_km = min(asked_km * config.STRETCH_FACTOR, ceiling)
     if longer_km <= asked_km * 1.2:
         return [], query
 

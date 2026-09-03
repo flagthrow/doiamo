@@ -267,7 +267,16 @@ DETOUR_MIN_RATIO = 1.15
 # more round of routing, so it runs at fewer seeds and only when the request
 # was genuinely impossible.
 STRETCH_FACTOR = float(os.environ.get("STRETCH_FACTOR", "2.0"))
-STRETCH_MAX_KM = float(os.environ.get("STRETCH_MAX_KM", "80"))
+# Measured from Bologna, whose hills sit about eight kilometres out: a 20 km
+# loop found 65 m, a 40 km loop 559 m, a 73 km loop 1072 m. A round trip only
+# reaches about L/2pi from home, so the distance that touches real terrain is
+# large — and past a point the honest answer stops being an alternative and
+# becomes a different sport altogether. A marathon is the outer edge of what
+# can be offered to someone who asked for a run; a bike goes much further.
+STRETCH_MAX_KM: Dict[str, float] = {
+    "running": float(os.environ.get("STRETCH_MAX_KM_RUNNING", "42")),
+    "cycling": float(os.environ.get("STRETCH_MAX_KM_CYCLING", "150")),
+}
 STRETCH_SEEDS = int(os.environ.get("STRETCH_SEEDS", "3"))
 # Not worth offering a longer route that barely climbs any more than the one
 # already on the page.
