@@ -286,3 +286,39 @@ def test_the_weights_still_sum_to_one_when_staying_in_town():
     routes = [make_route(waytype={3: 10000.0})]
     scored, _, _ = candidates.rank(routes, request(area="urban"), CALM, {})
     assert 0.0 <= scored[0].scores.total <= 1.0
+
+
+# --- a stub is not a short route -------------------------------------------
+
+def test_stub_loops_are_dropped_not_offered():
+    """ORS round_trip sometimes cannot build the loop a seed asked for and
+    returns a fraction of it. Three 1 km options in answer to a 10 km run are
+    worse than none."""
+    stubs = [make_route(distance_m=1000.0, center_lon=9.19 + i * 0.02) for i in range(3)]
+
+    ranked, _, notices = candidates.rank(stubs, request(distance_km=10.0), CALM, {})
+
+    assert ranked == []
+    assert "no_route_of_that_length" in notices
+
+
+def test_a_loose_match_is_still_offered():
+    """9.2 km for a 10 km request is a real answer; the floor must not eat it."""
+    close = make_route(distance_m=9200.0)
+
+    ranked, _, notices = candidates.rank([close], request(distance_km=10.0), CALM, {})
+
+    assert len(ranked) == 1
+    assert "no_route_of_that_length" not in notices
+
+
+def test_stubs_are_dropped_while_a_real_route_survives():
+    good = make_route(distance_m=10100.0)
+    stub = make_route(distance_m=900.0, center_lon=9.26)
+
+    ranked, _, notices = candidates.rank(
+        [good, stub], request(distance_km=10.0), CALM, {}
+    )
+
+    assert [round(r.distance_m) for r in ranked] == [10100]
+    assert "some_routes_too_short" in notices

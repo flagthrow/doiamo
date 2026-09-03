@@ -27,6 +27,14 @@ AIR_SAMPLES_PER_ROUTE = 5
 # A candidate this far off the requested distance is not what was asked for.
 DISTANCE_REJECT_RATIO = 0.35
 
+# Below this fraction of what was asked for, a candidate is not a loose match,
+# it is a failed generation: ORS round_trip sometimes cannot build the loop a
+# seed asks for and returns a stub instead. Three 1 km options in answer to
+# "una corsa" are worse than none — nobody drives to the Colosseum for a
+# thousand metres — so they are dropped even when nothing else survives, and
+# the page says why rather than showing them.
+DISTANCE_FLOOR_RATIO = 0.5
+
 # Geometry overlap above which two candidates are treated as the same loop.
 DUPLICATE_OVERLAP = 0.7
 
@@ -273,6 +281,14 @@ def rank(
     has_distance_target = request.distance_km is not None
     target_m = (request.distance_km or 0.0) * 1000.0
     if has_distance_target:
+        usable = [m for m in measured if m.distance_m >= DISTANCE_FLOOR_RATIO * target_m]
+        if len(usable) < len(measured):
+            notices.append("some_routes_too_short")
+        if not usable:
+            # Nothing worth showing. Saying so beats offering a stub.
+            return [], air_context, ["no_route_of_that_length"]
+        measured = usable
+
         on_target = [
             m for m in measured
             if abs(m.distance_m - target_m) <= DISTANCE_REJECT_RATIO * target_m

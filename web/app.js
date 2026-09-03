@@ -1440,6 +1440,7 @@ async function search() {
     if (notices.includes("busy_roads_only")) notes.push(t("busyRoadsOnly"));
     if (notices.includes("gain_target_unreachable")) notes.push(t("noFlatOption"));
     if (notices.includes("distance_target_unreachable")) notes.push(t("noDistanceOption"));
+    if (notices.includes("no_route_of_that_length")) notes.push(t("noRouteOfLength"));
     message(notes.join(" "), notes.length ? "warn" : "");
 
     renderContext();

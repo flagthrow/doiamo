@@ -134,6 +134,8 @@ const STRINGS = {
       "Qui non ci sono percorsi con il dislivello che hai chiesto: sotto trovi i pi\u00f9 piatti.",
     noDistanceOption:
       "Nessun percorso vicino alla distanza che hai chiesto: sotto trovi i pi\u00f9 simili.",
+    noRouteOfLength:
+      "Da qui non riusciamo a costruire un anello di quella lunghezza. Prova a partire da una via vicina, o a chiedere una distanza diversa.",
     bigRoadWhy:
       "Quota del percorso su statali e strade a scorrimento. Autostrade e superstrade "
       + "vietate a piedi e in bici non vengono mai usate.",
@@ -293,6 +295,8 @@ const STRINGS = {
       "Nothing here has the climb you asked for \u2014 these are the flattest.",
     noDistanceOption:
       "Nothing came out near the distance you asked for \u2014 these are the closest.",
+    noRouteOfLength:
+      "No loop of that length can be built from here. Try starting from a nearby street, or asking for a different distance.",
     bigRoadWhy:
       "Share of the route on state and trunk roads. Motorways and other roads "
       + "closed to pedestrians and bikes are never used.",
